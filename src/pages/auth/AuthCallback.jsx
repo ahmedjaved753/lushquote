@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/api/supabaseClient'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle, AlertCircle, Flower2 } from 'lucide-react'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -76,14 +76,16 @@ export default function AuthCallback() {
   }, [navigate, searchParams])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50/50 via-white to-green-50/40 p-4">
+      <Card className="w-full max-w-md shadow-xl border-green-100">
         {loading && (
           <>
             <CardHeader className="space-y-1 text-center">
-              <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-500 mb-4" />
-              <CardTitle className="text-2xl font-bold">Authenticating</CardTitle>
-              <CardDescription>
+              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-3xl flex items-center justify-center shadow-xl mx-auto mb-4">
+                <Loader2 className="w-10 h-10 text-white animate-spin" />
+              </div>
+              <CardTitle className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-green-800 bg-clip-text text-transparent">Authenticating</CardTitle>
+              <CardDescription className="text-gray-600">
                 Please wait while we complete your authentication...
               </CardDescription>
             </CardHeader>
@@ -93,9 +95,11 @@ export default function AuthCallback() {
         {success && !loading && (
           <>
             <CardHeader className="space-y-1 text-center">
-              <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
-              <CardTitle className="text-2xl font-bold">Success!</CardTitle>
-              <CardDescription>
+              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-3xl flex items-center justify-center shadow-xl mx-auto mb-4">
+                <CheckCircle className="w-10 h-10 text-white" />
+              </div>
+              <CardTitle className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-green-800 bg-clip-text text-transparent">Success!</CardTitle>
+              <CardDescription className="text-gray-600">
                 Authentication completed successfully
               </CardDescription>
             </CardHeader>
@@ -110,8 +114,10 @@ export default function AuthCallback() {
         {error && !loading && (
           <>
             <CardHeader className="space-y-1 text-center">
-              <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-              <CardTitle className="text-2xl font-bold">Authentication Error</CardTitle>
+              <div className="w-16 h-16 bg-gradient-to-br from-red-400 to-red-600 rounded-3xl flex items-center justify-center shadow-xl mx-auto mb-4">
+                <AlertCircle className="w-10 h-10 text-white" />
+              </div>
+              <CardTitle className="text-2xl font-bold text-red-700">Authentication Error</CardTitle>
             </CardHeader>
             <CardContent>
               <Alert variant="destructive">

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, Mail, Lock, Chrome, CheckCircle } from 'lucide-react'
+import { Loader2, Mail, Lock, Chrome, CheckCircle, Flower2 } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 
 export default function Signup() {
@@ -87,12 +87,12 @@ export default function Signup() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50/50 via-white to-green-50/40 p-4">
+        <Card className="w-full max-w-md shadow-xl border-green-100">
           <CardHeader className="space-y-1 text-center">
             <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
-            <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-green-800 bg-clip-text text-transparent">Check your email</CardTitle>
+            <CardDescription className="text-gray-600">
               We've sent a confirmation link to <strong>{email}</strong>
             </CardDescription>
           </CardHeader>
@@ -102,7 +102,7 @@ export default function Signup() {
             </p>
           </CardContent>
           <CardFooter className="flex justify-center">
-            <Link to="/auth/login" className="text-blue-600 hover:text-blue-500 hover:underline">
+            <Link to="/auth/login" className="text-green-600 hover:text-green-500 hover:underline font-medium">
               Back to sign in
             </Link>
           </CardFooter>
@@ -112,11 +112,14 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Create account</CardTitle>
-          <CardDescription className="text-center">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50/50 via-white to-green-50/40 p-4">
+      <Card className="w-full max-w-md shadow-xl border-green-100">
+        <CardHeader className="space-y-1 text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-3xl flex items-center justify-center shadow-xl mx-auto mb-4">
+            <Flower2 className="w-10 h-10 text-white" />
+          </div>
+          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-green-800 bg-clip-text text-transparent">Create account</CardTitle>
+          <CardDescription className="text-center text-gray-600">
             Sign up for your LushQuote account
           </CardDescription>
         </CardHeader>
@@ -129,32 +132,32 @@ export default function Signup() {
           
           <form onSubmit={handleEmailSignup} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-gray-700 font-medium">Email</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-green-400" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 border-green-200 focus:border-green-400 focus:ring-green-400"
                   required
                 />
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-green-400" />
                 <Input
                   id="password"
                   type="password"
                   placeholder="Create a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 border-green-200 focus:border-green-400 focus:ring-green-400"
                   required
                 />
               </div>
@@ -164,16 +167,16 @@ export default function Signup() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">Confirm Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-green-400" />
                 <Input
                   id="confirmPassword"
                   type="password"
                   placeholder="Confirm your password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 border-green-200 focus:border-green-400 focus:ring-green-400"
                   required
                 />
               </div>
@@ -181,7 +184,7 @@ export default function Signup() {
 
             <Button 
               type="submit" 
-              className="w-full" 
+              className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300" 
               disabled={loading}
             >
               {loading ? (
@@ -211,20 +214,20 @@ export default function Signup() {
             variant="outline"
             onClick={handleGoogleSignup}
             disabled={loading}
-            className="w-full"
+            className="w-full border-green-200 hover:bg-green-50 hover:border-green-300 transition-all duration-300"
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Chrome className="mr-2 h-4 w-4" />
             )}
-            Google
+            Continue with Google
           </Button>
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-gray-600">
             Already have an account?{' '}
-            <Link to="/auth/login" className="text-blue-600 hover:text-blue-500 hover:underline font-medium">
+            <Link to="/auth/login" className="text-green-600 hover:text-green-500 hover:underline font-medium">
               Sign in
             </Link>
           </p>
