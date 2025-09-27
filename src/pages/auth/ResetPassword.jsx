@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/api/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,14 +21,17 @@ export default function ResetPassword() {
   const [isValidToken, setIsValidToken] = useState(true)
 
   useEffect(() => {
-    // Check if we have the required tokens
-    const accessToken = searchParams.get('access_token')
-    const refreshToken = searchParams.get('refresh_token')
-    const type = searchParams.get('type')
-
-    // Check for error parameters in the URL hash
+    // Supabase sends tokens in both URL hash and query parameters
+    // Check URL hash first (this is where Supabase typically sends tokens)
     const hash = window.location.hash.substring(1) // Remove the # symbol
     const hashParams = new URLSearchParams(hash)
+    
+    // Check query parameters as fallback
+    const accessToken = hashParams.get('access_token') || searchParams.get('access_token')
+    const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token')
+    const type = hashParams.get('type') || searchParams.get('type')
+    
+    // Check for error parameters in the URL hash
     const error = hashParams.get('error')
     const errorCode = hashParams.get('error_code')
     const errorDescription = hashParams.get('error_description')
@@ -43,6 +47,32 @@ export default function ResetPassword() {
     } else if (!accessToken || !refreshToken || type !== 'recovery') {
       setIsValidToken(false)
       setError('This password reset link is invalid or missing required parameters.')
+    } else {
+      // If we have valid tokens, set the session
+      const setAuthSession = async () => {
+        try {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
+          if (error) {
+            console.error('Error setting session:', error)
+            setIsValidToken(false)
+            setError('Failed to authenticate with the provided tokens. Please request a new reset link.')
+          } else {
+            // Clean up the URL by removing hash parameters for security
+            if (window.location.hash) {
+              window.history.replaceState({}, document.title, window.location.pathname)
+            }
+          }
+        } catch (err) {
+          console.error('Session error:', err)
+          setIsValidToken(false)
+          setError('Failed to authenticate with the provided tokens. Please request a new reset link.')
+        }
+      }
+      
+      setAuthSession()
     }
   }, [searchParams])
 
