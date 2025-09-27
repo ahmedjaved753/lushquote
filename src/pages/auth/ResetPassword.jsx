@@ -25,8 +25,24 @@ export default function ResetPassword() {
     const refreshToken = searchParams.get('refresh_token')
     const type = searchParams.get('type')
 
-    if (!accessToken || !refreshToken || type !== 'recovery') {
+    // Check for error parameters in the URL hash
+    const hash = window.location.hash.substring(1) // Remove the # symbol
+    const hashParams = new URLSearchParams(hash)
+    const error = hashParams.get('error')
+    const errorCode = hashParams.get('error_code')
+    const errorDescription = hashParams.get('error_description')
+
+    // If we have error parameters, the link is expired/invalid
+    if (error || errorCode || errorDescription) {
       setIsValidToken(false)
+      if (errorCode === 'otp_expired') {
+        setError('This password reset link has expired. Password reset links are only valid for a limited time for security reasons.')
+      } else {
+        setError(errorDescription || 'This password reset link is invalid or has expired.')
+      }
+    } else if (!accessToken || !refreshToken || type !== 'recovery') {
+      setIsValidToken(false)
+      setError('This password reset link is invalid or missing required parameters.')
     }
   }, [searchParams])
 
@@ -91,6 +107,11 @@ export default function ResetPassword() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-sm">{error}</AlertDescription>
+              </Alert>
+            )}
             <p className="text-sm text-gray-600 text-center">
               Please request a new password reset link to continue.
             </p>
