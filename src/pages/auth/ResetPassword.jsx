@@ -148,10 +148,14 @@ export default function ResetPassword() {
           </CardContent>
           <CardFooter className="flex justify-center space-x-4">
             <Link to="/auth/forgot-password">
-              <Button variant="outline">Request new link</Button>
+              <Button variant="outline" className="border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 font-medium">
+                Request new link
+              </Button>
             </Link>
             <Link to="/auth/login">
-              <Button>Back to sign in</Button>
+              <Button className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300">
+                Back to sign in
+              </Button>
             </Link>
           </CardFooter>
         </Card>
@@ -177,7 +181,9 @@ export default function ResetPassword() {
           </CardContent>
           <CardFooter className="flex justify-center">
             <Link to="/auth/login">
-              <Button>Sign in now</Button>
+              <Button className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300">
+                Sign in now
+              </Button>
             </Link>
           </CardFooter>
         </Card>
