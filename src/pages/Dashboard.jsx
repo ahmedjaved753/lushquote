@@ -1,9 +1,6 @@
 
 import React, { useState, useEffect } from "react";
 
-// 🚨 HACK MODE: Set to true to bypass template limits for testing
-// TODO: Remove this before production deployment
-const BYPASS_TEMPLATE_LIMITS = true;
 import { QuoteTemplate, QuoteSubmission, User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -228,7 +225,7 @@ export default function Dashboard() {
   };
 
   // Logic for free tier template limit: free users can only create 1 template
-  const canCreateTemplate = BYPASS_TEMPLATE_LIMITS || user?.subscription_tier === 'premium' || templates.length < 1;
+  const canCreateTemplate = user?.subscription_tier === 'premium' || templates.length < 1;
 
 
   return (

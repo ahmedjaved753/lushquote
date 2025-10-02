@@ -3,9 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-// 🚨 HACK MODE: Set to true to bypass template limits for testing
-// TODO: Remove this before production deployment
-const BYPASS_TEMPLATE_LIMITS = true;
 import { createPageUrl } from "@/utils";
 import { User, QuoteTemplate } from "@/api/entities";
 import { useAuth } from "@/hooks/useAuth";
@@ -109,12 +106,12 @@ export default function Layout({ children, currentPageName }) {
   const handleNavClick = async (e, item) => {
     const evaluatedTier = user?.user_metadata?.subscription_tier || 'free';
     // Intercept clicks to the template builder for free users
-    if (item.title === 'Create Template' && evaluatedTier === 'free' && !BYPASS_TEMPLATE_LIMITS) {
+    if (item.title === 'Create Template' && evaluatedTier === 'free') {
       e.preventDefault(); // Always stop the default link behavior first
-      
+
       try {
         const userTemplates = await QuoteTemplate.filter({ user_id: user.id });
-        
+
         if (userTemplates.length >= 1) {
           // If limit is reached, show the upgrade dialog
           setShowUpgradeDialog(true);
@@ -126,9 +123,6 @@ export default function Layout({ children, currentPageName }) {
         console.error("Error checking template limit during navigation:", error);
         toast.error("Could not verify your template limit. Please try again.");
       }
-    } else if (item.title === 'Create Template' && evaluatedTier === 'free' && BYPASS_TEMPLATE_LIMITS) {
-      console.log("%c🚨 HACK MODE: Bypassing navigation limits!", "color: orange; font-weight: bold;");
-      // Allow normal navigation to proceed
     }
   };
   

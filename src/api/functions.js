@@ -1,16 +1,28 @@
 import { supabase } from './supabaseClient';
 
 // Supabase Edge Functions for Stripe integration
-export const createCheckoutSession = async (sessionData) => {
+export const createCheckoutSession = async () => {
+  // Get current session to pass auth token
+  const { data: { session } } = await supabase.auth.getSession();
+
   const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-    body: sessionData
+    headers: {
+      Authorization: `Bearer ${session?.access_token}`,
+    },
+    body: {}
   });
   return { data, error };
 };
 
-export const createBillingPortalSession = async (customerId) => {
+export const createBillingPortalSession = async () => {
+  // Get current session to pass auth token
+  const { data: { session } } = await supabase.auth.getSession();
+
   const { data, error } = await supabase.functions.invoke('create-billing-portal-session', {
-    body: { customerId }
+    headers: {
+      Authorization: `Bearer ${session?.access_token}`,
+    },
+    body: {}
   });
   return { data, error };
 };
