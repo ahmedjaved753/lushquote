@@ -35,25 +35,35 @@ export const AuthProvider = ({ children }) => {
         console.log('[useAuth] Getting initial session...');
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error) {
-          console.error('Error getting session:', error)
+          console.error('[useAuth] Error getting session:', error)
           // Don't throw error for session retrieval issues
         } else {
           setSession(session)
           
           if (session?.user) {
             console.log('[useAuth] Session found, fetching user profile...');
-            const userWithProfile = await fetchUserProfile(session.user)
-            setUser(userWithProfile)
-            await fetchUserRole(session.user)
+            try {
+              const userWithProfile = await fetchUserProfile(session.user)
+              console.log('[useAuth] User profile fetched, setting user...');
+              setUser(userWithProfile)
+              await fetchUserRole(session.user)
+              console.log('[useAuth] Initial setup complete');
+            } catch (profileError) {
+              console.error('[useAuth] Error fetching profile during init:', profileError);
+              // Set user anyway with basic auth data
+              setUser(session.user)
+              await fetchUserRole(session.user)
+            }
           } else {
             console.log('[useAuth] No session found');
             setUser(null)
           }
         }
       } catch (error) {
-        console.error('Error in getSession:', error)
+        console.error('[useAuth] Error in getSession:', error)
         // Continue with null session rather than crashing
       } finally {
+        console.log('[useAuth] Setting loading to false (initial session complete)');
         setLoading(false)
       }
     }
@@ -63,24 +73,51 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[useAuth] Auth state changed:', event, session?.user?.email)
+        console.log('[useAuth] 📡 Auth state changed:', event, session?.user?.email)
+        
+        // Skip initial SIGNED_IN event if we already have a user
+        // (prevents double fetch on mount)
+        if (event === 'SIGNED_IN' && user) {
+          console.log('[useAuth] ⏭️ Skipping duplicate SIGNED_IN event (user already loaded)');
+          setLoading(false); // Make sure loading is false
+          return;
+        }
         
         try {
+          console.log('[useAuth] 🔄 Processing auth state change...');
           setSession(session)
           
           if (session?.user) {
-            console.log('[useAuth] Fetching user profile after auth change...');
+            console.log('[useAuth] 👤 User session exists, fetching profile...');
+            console.log('[useAuth] About to call fetchUserProfile...');
+            
             const userWithProfile = await fetchUserProfile(session.user)
+            
+            console.log('[useAuth] ✅ fetchUserProfile returned, setting user state...');
             setUser(userWithProfile)
+            
+            console.log('[useAuth] 🔐 Fetching user role...');
             await fetchUserRole(session.user)
+            
+            console.log('[useAuth] ✅ User profile and role set after auth change');
           } else {
-            console.log('[useAuth] No user after auth change');
+            console.log('[useAuth] ❌ No user session, clearing user state');
             setUser(null)
             setUserRole(null)
           }
         } catch (error) {
-          console.error('Error handling auth state change:', error)
+          console.error('[useAuth] ❌ EXCEPTION handling auth state change:', {
+            error: error,
+            message: error?.message,
+            stack: error?.stack
+          })
+          // Set user anyway to prevent infinite loading
+          if (session?.user) {
+            console.log('[useAuth] 🔄 Setting user with basic auth data as fallback');
+            setUser(session.user)
+          }
         } finally {
+          console.log('[useAuth] 🏁 Setting loading to FALSE after auth change (FINALLY block)');
           setLoading(false)
         }
       }
@@ -123,41 +160,111 @@ export const AuthProvider = ({ children }) => {
 
     try {
       console.log('[useAuth] Fetching user profile for:', authUser.email);
+      console.log('[useAuth] User ID:', authUser.id);
+      console.log('[useAuth] Starting database query to user_profiles table...');
       
-      // Get or create user profile
-      let { data: profile, error: profileError } = await supabase
+      // Create timeout promise
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+          console.error('[useAuth] ⚠️ TIMEOUT: Profile fetch took too long (3 seconds), using fallback');
+          resolve({ timedOut: true });
+        }, 3000);
+      });
+      
+      // Create fetch promise
+      const fetchPromise = supabase
         .from('user_profiles')
         .select('*')
         .eq('id', authUser.id)
-        .single();
+        .single()
+        .then(result => {
+          console.log('[useAuth] ✅ Database query completed');
+          return { ...result, timedOut: false };
+        });
+      
+      // Race between fetch and timeout
+      const result = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (result.timedOut) {
+        console.error('[useAuth] Using fallback due to timeout');
+        return {
+          ...authUser,
+          subscription_tier: 'free',
+          user_metadata: {
+            ...authUser.user_metadata,
+            subscription_tier: 'free',
+          }
+        };
+      }
+      
+      const { data: profile, error: profileError } = result;
+      console.log('[useAuth] Profile query result:', { 
+        hasProfile: !!profile, 
+        hasError: !!profileError,
+        errorCode: profileError?.code,
+        errorMessage: profileError?.message 
+      });
 
       if (profileError && profileError.code === 'PGRST116') {
-        console.log('[useAuth] Profile not found, creating new profile');
-        // Profile doesn't exist, create it
-        const { data: newProfile, error: createError } = await supabase
-          .from('user_profiles')
-          .insert([{
-            id: authUser.id,
-            email: authUser.email,
-            preferred_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0]
-          }])
-          .select()
-          .single();
+        console.log('[useAuth] ❌ Profile not found (PGRST116), creating new profile...');
+        
+        try {
+          const { data: newProfile, error: createError } = await supabase
+            .from('user_profiles')
+            .insert([{
+              id: authUser.id,
+              email: authUser.email,
+              preferred_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0]
+            }])
+            .select()
+            .single();
 
-        if (createError) {
-          console.error('[useAuth] Error creating profile:', createError);
-          return authUser; // Return auth user without profile data
+          if (createError) {
+            console.error('[useAuth] ❌ Error creating profile:', createError);
+            return {
+              ...authUser,
+              subscription_tier: 'free',
+              user_metadata: {
+                ...authUser.user_metadata,
+                subscription_tier: 'free',
+              }
+            };
+          }
+          
+          console.log('[useAuth] ✅ New profile created successfully');
+          profile = newProfile;
+        } catch (createErr) {
+          console.error('[useAuth] ❌ Exception creating profile:', createErr);
+          return {
+            ...authUser,
+            subscription_tier: 'free',
+            user_metadata: {
+              ...authUser.user_metadata,
+              subscription_tier: 'free',
+            }
+          };
         }
-        profile = newProfile;
       } else if (profileError) {
-        console.error('[useAuth] Error fetching profile:', profileError);
-        return authUser; // Return auth user without profile data
+        console.error('[useAuth] ❌ Error fetching profile:', {
+          code: profileError.code,
+          message: profileError.message,
+          details: profileError.details,
+          hint: profileError.hint
+        });
+        return {
+          ...authUser,
+          subscription_tier: 'free',
+          user_metadata: {
+            ...authUser.user_metadata,
+            subscription_tier: 'free',
+          }
+        };
       }
 
-      console.log('[useAuth] Profile fetched successfully:', {
-        email: profile.email,
-        subscription_tier: profile.subscription_tier,
-        subscription_status: profile.subscription_status,
+      console.log('[useAuth] ✅ Profile fetched successfully:', {
+        email: profile?.email,
+        subscription_tier: profile?.subscription_tier,
+        subscription_status: profile?.subscription_status,
       });
 
       // Merge auth user with profile data
@@ -171,10 +278,24 @@ export const AuthProvider = ({ children }) => {
         }
       };
 
+      console.log('[useAuth] 🎯 Returning merged user with subscription_tier:', mergedUser.subscription_tier);
       return mergedUser;
+      
     } catch (error) {
-      console.error('[useAuth] Error in fetchUserProfile:', error);
-      return authUser; // Return auth user without profile data on error
+      console.error('[useAuth] ❌ EXCEPTION in fetchUserProfile:', {
+        error: error,
+        message: error?.message,
+        stack: error?.stack
+      });
+      // Return auth user with default free tier on any error
+      return {
+        ...authUser,
+        subscription_tier: 'free',
+        user_metadata: {
+          ...authUser.user_metadata,
+          subscription_tier: 'free',
+        }
+      };
     }
   }
 
