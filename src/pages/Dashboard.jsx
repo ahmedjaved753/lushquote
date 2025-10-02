@@ -90,6 +90,11 @@ export default function Dashboard() {
           // Check if upgrade was successful
           if (freshUser?.subscription_tier === 'premium') {
             console.log("🎉 User successfully upgraded to premium!");
+            
+            // Dispatch event to refresh Layout/navbar
+            console.log("📡 Dispatching userUpdated event to refresh navbar...");
+            window.dispatchEvent(new CustomEvent('userUpdated'));
+            
             toast.success("Welcome to LushQuote Premium! 🎉", {
               duration: 5000,
             });
@@ -105,6 +110,11 @@ export default function Dashboard() {
               setTimeout(() => checkUpgradeStatus(attemptNumber + 1), 2000);
             } else {
               console.error("❌ Failed to detect upgrade after 3 attempts");
+              
+              // Still dispatch event to refresh navbar (might have updated by now)
+              console.log("📡 Dispatching userUpdated event (final attempt)...");
+              window.dispatchEvent(new CustomEvent('userUpdated'));
+              
               toast.warning("Payment processed! If you don't see Premium status, please refresh the page.", {
                 duration: 8000,
               });
@@ -163,6 +173,11 @@ export default function Dashboard() {
       // No manual reset needed
 
       setUser(currentUser);
+      
+      console.log("✅ User state updated in Dashboard:", {
+        email: currentUser.email,
+        tier: currentUser.subscription_tier,
+      });
 
       const [userTemplates, submissionsData] = await Promise.all([
         QuoteTemplate.filter({ user_id: currentUser.id }, "-updated_date"),

@@ -32,15 +32,22 @@ export const AuthProvider = ({ children }) => {
     // Get initial session
     const getSession = async () => {
       try {
+        console.log('[useAuth] Getting initial session...');
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error) {
           console.error('Error getting session:', error)
           // Don't throw error for session retrieval issues
         } else {
           setSession(session)
-          setUser(session?.user || null)
+          
           if (session?.user) {
+            console.log('[useAuth] Session found, fetching user profile...');
+            const userWithProfile = await fetchUserProfile(session.user)
+            setUser(userWithProfile)
             await fetchUserRole(session.user)
+          } else {
+            console.log('[useAuth] No session found');
+            setUser(null)
           }
         }
       } catch (error) {
@@ -56,15 +63,19 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session)
+        console.log('[useAuth] Auth state changed:', event, session?.user?.email)
         
         try {
           setSession(session)
-          setUser(session?.user || null)
           
           if (session?.user) {
+            console.log('[useAuth] Fetching user profile after auth change...');
+            const userWithProfile = await fetchUserProfile(session.user)
+            setUser(userWithProfile)
             await fetchUserRole(session.user)
           } else {
+            console.log('[useAuth] No user after auth change');
+            setUser(null)
             setUserRole(null)
           }
         } catch (error) {
@@ -75,7 +86,22 @@ export const AuthProvider = ({ children }) => {
       }
     )
 
-    return () => subscription.unsubscribe()
+    // Listen for custom userUpdated event (fired from Settings or after payment)
+    const handleUserUpdated = async () => {
+      console.log('[useAuth] userUpdated event received, refreshing user data...');
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const userWithProfile = await fetchUserProfile(session.user)
+        setUser(userWithProfile)
+      }
+    }
+
+    window.addEventListener('userUpdated', handleUserUpdated)
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('userUpdated', handleUserUpdated)
+    }
   }, [])
 
   const fetchUserRole = async (user) => {
@@ -86,6 +112,69 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error fetching user role:', error)
       setUserRole('user') // Default to user role
+    }
+  }
+
+  const fetchUserProfile = async (authUser) => {
+    if (!authUser) {
+      console.log('[useAuth] No auth user, skipping profile fetch');
+      return authUser;
+    }
+
+    try {
+      console.log('[useAuth] Fetching user profile for:', authUser.email);
+      
+      // Get or create user profile
+      let { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError && profileError.code === 'PGRST116') {
+        console.log('[useAuth] Profile not found, creating new profile');
+        // Profile doesn't exist, create it
+        const { data: newProfile, error: createError } = await supabase
+          .from('user_profiles')
+          .insert([{
+            id: authUser.id,
+            email: authUser.email,
+            preferred_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0]
+          }])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('[useAuth] Error creating profile:', createError);
+          return authUser; // Return auth user without profile data
+        }
+        profile = newProfile;
+      } else if (profileError) {
+        console.error('[useAuth] Error fetching profile:', profileError);
+        return authUser; // Return auth user without profile data
+      }
+
+      console.log('[useAuth] Profile fetched successfully:', {
+        email: profile.email,
+        subscription_tier: profile.subscription_tier,
+        subscription_status: profile.subscription_status,
+      });
+
+      // Merge auth user with profile data
+      const mergedUser = {
+        ...authUser,
+        ...profile,
+        // Also update user_metadata to keep backward compatibility
+        user_metadata: {
+          ...authUser.user_metadata,
+          ...profile,
+        }
+      };
+
+      return mergedUser;
+    } catch (error) {
+      console.error('[useAuth] Error in fetchUserProfile:', error);
+      return authUser; // Return auth user without profile data on error
     }
   }
 
