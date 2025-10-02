@@ -177,7 +177,13 @@ export default function QuoteManagement() {
   };
 
   const formatDate = (dateString) => {
-    return format(new Date(dateString), "MMM d, yyyy 'at' h:mm a");
+    if (!dateString) return "No date";
+    try {
+      const date = new Date(dateString);
+      return isNaN(date.getTime()) ? "Invalid date" : format(date, "MMM d, yyyy 'at' h:mm a");
+    } catch (error) {
+      return "Invalid date";
+    }
   };
 
   const formatTime = (timeString) => {
@@ -189,18 +195,24 @@ export default function QuoteManagement() {
   };
 
   const formatRequestDateTime = (submission) => {
-    if (submission.requested_date) {
-      const datePart = format(parseISO(submission.requested_date), "MMM d, yyyy");
-      const timePart = submission.requested_time ? ` at ${formatTime(submission.requested_time)}` : '';
-      return datePart + timePart;
+    try {
+      if (submission.requested_date) {
+        const datePart = format(parseISO(submission.requested_date), "MMM d, yyyy");
+        const timePart = submission.requested_time ? ` at ${formatTime(submission.requested_time)}` : '';
+        return datePart + timePart;
+      }
+      if (submission.requested_time) {
+        return `Time: ${formatTime(submission.requested_time)}`;
+      }
+      if (submission.requested_datetime) {
+        const date = new Date(submission.requested_datetime);
+        return isNaN(date.getTime()) ? "Invalid date" : format(date, "MMM d, yyyy 'at' p");
+      }
+      return null;
+    } catch (error) {
+      console.warn('Error formatting request date/time:', error);
+      return "Invalid date";
     }
-    if (submission.requested_time) {
-      return `Time: ${formatTime(submission.requested_time)}`;
-    }
-    if (submission.requested_datetime) {
-      return format(new Date(submission.requested_datetime), "MMM d, yyyy 'at' p");
-    }
-    return null;
   };
   
   const statusColors = {
@@ -347,7 +359,7 @@ export default function QuoteManagement() {
                         <div className="flex items-start gap-2 text-xs sm:text-sm text-gray-500">
                           <Calendar className="w-4 h-4 flex-shrink-0 mt-0.5" />
                           <span className="break-words leading-tight">
-                            Submitted {formatDate(submission.created_date)}
+                            Submitted {formatDate(submission.created_date || submission.submitted_at)}
                           </span>
                         </div>
                         { (submission.requested_date || submission.requested_time || submission.requested_datetime) && (

@@ -1,6 +1,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { QuoteTemplate, User } from "@/api/entities";
+
+// 🚨 HACK MODE: Set to true to bypass template limits for testing
+// TODO: Remove this before production deployment
+const BYPASS_TEMPLATE_LIMITS = true;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle }
   from "@/components/ui/card";
@@ -69,9 +73,9 @@ export default function TemplateBuilder() {
         console.log(`[TemplateBuilder Debug] Page mode: ${editId ? `EDIT (id: ${editId})` : 'CREATE NEW'}`);
 
         // CRITICAL FIX: Check template limit for free users BEFORE doing anything else
-        if (!editId && evaluatedTier === 'free') {
+        if (!editId && evaluatedTier === 'free' && !BYPASS_TEMPLATE_LIMITS) {
           console.log("[TemplateBuilder Debug] User is FREE and creating a NEW template. Checking template limit...");
-          const userTemplates = await QuoteTemplate.filter({ created_by: currentUser.email });
+          const userTemplates = await QuoteTemplate.filter({ user_id: currentUser.id });
           console.log(`[TemplateBuilder Debug] API returned ${userTemplates.length} existing templates for this user.`);
           
           if (userTemplates.length >= 1) {
@@ -82,6 +86,8 @@ export default function TemplateBuilder() {
           } else {
             console.log("%c[TemplateBuilder Debug] Limit NOT reached. Proceeding with template creation flow.", "color: green;");
           }
+        } else if (!editId && evaluatedTier === 'free' && BYPASS_TEMPLATE_LIMITS) {
+          console.log("%c[TemplateBuilder Debug] 🚨 HACK MODE: Bypassing template limits!", "color: orange; font-weight: bold;");
         }
 
         if (editId) {
@@ -185,12 +191,14 @@ export default function TemplateBuilder() {
     
     // ADDITIONAL CHECK: Block free users from saving if they're creating a new template and already have one
     const evaluatedTier = user?.subscription_tier || 'free'; // Fix: Use evaluated tier
-    if (!editingId && evaluatedTier === 'free') {
-      const userTemplates = await QuoteTemplate.filter({ created_by: user.email });
+    if (!editingId && evaluatedTier === 'free' && !BYPASS_TEMPLATE_LIMITS) {
+      const userTemplates = await QuoteTemplate.filter({ user_id: user.id });
       if (userTemplates.length >= 1) {
         setShowUpgradeDialog(true);
         return; // Block the save
       }
+    } else if (!editingId && evaluatedTier === 'free' && BYPASS_TEMPLATE_LIMITS) {
+      console.log("%c[TemplateBuilder Debug] 🚨 HACK MODE: Bypassing save limits!", "color: orange; font-weight: bold;");
     }
     
     setIsLoading(true);

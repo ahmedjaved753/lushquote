@@ -1,0 +1,117 @@
+This project is a comprehensive web application designed to empower small to medium-sized businesses in generating and managing customer quotes efficiently. It provides a user-friendly interface for creating custom quote templates, a public-facing form for customer submissions, and a dashboard for tracking and managing all quote requests. The application also integrates a subscription model with Stripe, offering free and premium tiers with varying feature sets and quotas.
+
+Here's a detailed breakdown of its scope and functionality:
+
+1. Core Purpose
+To streamline the quote generation and management process for businesses by providing a customizable, shareable, and trackable system for customer inquiries and service pricing.
+
+2. User Roles
+Business Owner (Authenticated User): Creates and manages quote templates, tracks submissions, and manages subscription.
+Customer (Unauthenticated User): Interacts with the public quote forms to submit their requests.
+3. Key Application Modules & Functionality
+3.1. Dashboard (/Dashboard)
+Overview Statistics: Displays key metrics like total templates created, total submissions received, total estimated revenue, and average quote value. For free users, it also shows the current monthly submission count against their limit.
+Template List: Shows a list of all quote templates created by the user, including quick actions like editing, copying the public link, and viewing submissions specific to that template.
+Recent Submissions: A sidebar component displaying a summary of the most recent quote submissions, with links to view full details.
+Create New Template Button: Directs users to the Template Builder. For free users, this button triggers an "Upgrade to Premium" dialog if their template limit (1) has been reached.
+Stripe Integration: Checks for success/cancel query parameters from Stripe checkout sessions and displays appropriate toast notifications.
+Submission Counter Reset: Automatically resets the monthly_submission_count for free users at the start of each new month.
+3.2. Template Builder (/TemplateBuilder)
+Template Creation/Editing: Allows authenticated users to design and modify their quote forms.
+Business Information: Fields for business name and a general description of services.
+Services & Pricing:
+Dynamically add/remove individual services.
+Service Types:
+Fixed Price: A one-time charge.
+Per Unit: Price multiplied by quantity, with a customizable unit_label (e.g., "hours," "guests").
+Recurring: For subscription-based services, with a frequency field (e.g., "Monthly," "Yearly").
+Selection Methods:
+Checkbox: Simple yes/no selection.
+Numeric Stepper: Quantity selection using +/- buttons.
+Text Input: Manual quantity entry in a text field.
+Drag & Drop Reordering: Services can be reordered using drag-and-drop.
+Date & Time Request:
+Optional fields to enable requesting a preferred date and/or time from the customer.
+Option to make date/time requests optional.
+Branding Editor:
+Allows customization of the quote form's header background color.
+Footer Branding:
+Premium Users: Can enable/disable and customize the footer text.
+Free Users: The footer is locked to display "Powered by LushQuote" branding.
+Live Preview: Toggles between the builder interface and a live, interactive preview of the quote form. The preview accurately reflects the configured service types and selection methods, including dynamic price calculation.
+Save/Delete Actions: Buttons to save changes or delete the template (with confirmation dialog).
+Free Tier Limit Enforcement:
+If a free user attempts to create a second template, an "Upgrade to Premium" dialog is immediately displayed, blocking further creation. This dialog is non-dismissible.
+3.3. Quote Form (/QuoteForm?template={templateId})
+Public Access: This page is accessible to unauthenticated users via a unique URL (generated from templateId).
+Dynamic Rendering: Displays the quote form based on the specified template, including:
+Configured business name, description, branding, and footer.
+All services with their respective selection methods (checkbox, numeric stepper, text input).
+Optional date/time request fields (if enabled in the template).
+Dynamic Price Calculation: As customers make selections, the "Estimated Total" is updated in real-time.
+Customer Information Fields: Gathers customer name, email, phone number, and optional notes.
+Submission Handling:
+Upon submission, creates a new QuoteSubmission record in the database.
+Free Tier Submission Limit: If the template owner is on the free tier and has reached 25 monthly submissions, the form is blocked with a non-dismissible dialog informing the customer that submissions are temporarily closed and when they will reopen.
+Increments the monthly_submission_count for free users upon successful submission.
+Submission Status Update: Automatically updates the submission status from 'new' to 'viewed' when an authenticated user opens the form for viewing a submitted quote.
+Confirmation Message: Displays a success message with the estimated total after a successful submission.
+3.4. Quote Management (/QuoteManagement)
+List of Submissions: Displays all quote submissions associated with the authenticated user's templates.
+Filters: Allows filtering submissions by:
+Status (New, Viewed, Contacted, Accepted, Rejected, Completed).
+Template (specific template or all).
+Submission Details: Each submission card shows:
+Customer name, email, phone.
+Calculated price.
+Submission status (with color-coded badges).
+Submitted date and requested date/time.
+Customer notes.
+Associated template name.
+Actions per Submission:
+Update Status: Dropdown to change the status of a submission.
+View Details: Link to open the QuoteForm in read-only mode to review the full submission.
+Delete: Deletes the submission (with confirmation dialog).
+Total Quote Value Display: Shows the sum of calculated prices for all currently displayed (filtered) submissions.
+3.5. Settings (/Settings)
+Profile Settings:
+Preferred Name: Customizable display name.
+Time Zone: Selection for user's preferred time zone.
+Preferences:
+Default Header Color: Sets the default color for new quote templates.
+Notifications:
+Notification Email: Specifies an email address for receiving notifications.
+Email Notifications Enabled: Toggle to enable/disable email notifications for new submissions.
+Account & Billing:
+Displays current subscription plan (Free/Premium).
+Free Users: Button to "Upgrade to Premium" (initiates Stripe Checkout).
+Premium Users: Button to "Manage Billing" (redirects to Stripe Customer Portal).
+Lists free plan limitations for clarity.
+Data Management:
+Premium Users: Option to export all quote submissions to a CSV file.
+Free Users: Feature is locked and prompts for upgrade.
+Account Deletion: Option to permanently delete the user's account and all associated data (with confirmation dialog).
+4. Subscription Model (Free vs. Premium)
+Free Tier:
+Limited to 1 template.
+Limited to 25 submissions per month per template owner.
+Quote forms include forced LushQuote branding in the footer.
+No CSV export functionality.
+Premium Tier:
+Unlimited templates.
+Unlimited monthly submissions.
+Ability to customize or remove LushQuote branding from form footers.
+Includes CSV export for all submission data.
+5. Technical Details
+Frontend: React, Tailwind CSS, Shadcn UI components, Lucide React icons.
+Backend (Base44 Platform):
+Entities: User, QuoteTemplate, QuoteSubmission (JSON Schema definitions with Row-Level Security).
+Backend Functions:
+createCheckoutSession: Initiates Stripe Checkout for premium upgrades.
+createBillingPortalSession: Redirects users to the Stripe customer portal for billing management.
+stripeWebhook: Handles Stripe webhook events (e.g., checkout.session.completed, customer.subscription.updated, customer.subscription.deleted) to update user subscription_tier, subscription_status, stripe_customer_id, stripe_subscription_id and subscription_current_period_end in the User entity.
+incrementSubmissionCounter: Increments the monthly submission count for free users. Also handles monthly resets.
+getTemplatePublicData: Fetches public template data and owner details (including submission count for limit checks) without requiring user authentication.
+Authentication: Handled by Base44 platform (Google OAuth).
+Data Persistence: Handled by Base44 entities (Supabase backend).
+Responsiveness: Designed to be fully responsive and optimized for both desktop and mobile devices.

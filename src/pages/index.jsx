@@ -89,13 +89,8 @@ function PagesContent() {
                 </ProtectedRoute>
             } />
             
-            <Route path="/QuoteForm" element={
-                <ProtectedRoute>
-                    <Layout currentPageName={currentPage}>
-                        <QuoteForm />
-                    </Layout>
-                </ProtectedRoute>
-            } />
+            {/* Public QuoteForm route - no authentication required */}
+            <Route path="/QuoteForm" element={<QuoteForm />} />
             
             <Route path="/QuoteManagement" element={
                 <ProtectedRoute>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, memo } from "react";
 import { QuoteTemplate, QuoteSubmission, User } from "@/api/entities";
-import { incrementSubmissionCounter } from "@/api/functions";
+import { incrementSubmissionCounter, createPublicQuoteSubmission } from "@/api/functions";
 import { getTemplatePublicData } from "@/api/functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -194,8 +194,16 @@ export default function QuoteForm() {
     const fetchData = async () => {
       try {
         console.log("[QuoteForm Debug] Fetching public template data...");
-        const { data } = await getTemplatePublicData({ templateId });
-        const { template: templateData, owner } = data;
+        console.log("[QuoteForm Debug] Template ID:", templateId);
+        const response = await getTemplatePublicData(templateId);
+        console.log("[QuoteForm Debug] Full response:", response);
+        
+        if (!response.data) {
+          console.error("[QuoteForm Debug] No data in response:", response);
+          throw new Error("No template data returned");
+        }
+        
+        const { template: templateData, owner } = response.data;
 
         console.log("[QuoteForm Debug] Template loaded:", templateData.business_name);
         console.log("[QuoteForm Debug] Owner data:", owner);
@@ -283,7 +291,7 @@ export default function QuoteForm() {
               });
             }
             setSelections(submissionSelections);
-            setCalculatedPrice(submissionData.calculated_price || 0); // Set calculated price from submission
+            setCalculatedPrice(submissionData.estimated_total || 0); // Set calculated price from submission
 
             // Handle new and old date/time fields for viewing
             if (submissionData.requested_date) {
@@ -435,13 +443,12 @@ export default function QuoteForm() {
       console.log("4. FINAL SUBMISSION DATA:");
       const submissionData = {
         template_id: template.id,
-        owner_email: template.owner_email, // Use the new public owner_email field
         customer_name: customerInfo.name,
         customer_email: customerInfo.email,
         customer_phone: customerInfo.phone,
-        selections: submissionSelections,
-        calculated_price: calculatedPrice,
-        notes: customerInfo.notes,
+        customer_notes: customerInfo.notes,
+        selected_services: submissionSelections,
+        estimated_total: calculatedPrice,
         requested_date: requestedDate ? formatISO(requestedDate, { representation: 'date' }) : null,
         requested_time: requestedTime || null,
         status: 'new', // Set initial status to 'new'
@@ -464,15 +471,19 @@ export default function QuoteForm() {
 
       // Step 4: API Call
       console.log("5. MAKING API CALL TO CREATE QUOTE SUBMISSION...");
-      console.log("   - Using QuoteSubmission.create()");
+      console.log("   - Using createPublicQuoteSubmission() for anonymous access");
       console.log("   - Payload size:", JSON.stringify(submissionData).length, "characters");
 
-      const result = await QuoteSubmission.create(submissionData);
+      const { data: result, error: submissionError } = await createPublicQuoteSubmission(submissionData);
+      
+      if (submissionError) {
+        throw submissionError;
+      }
 
       console.log("6. SUBMISSION CREATION SUCCESS:");
       console.log("   - Created Submission ID:", result.id);
       console.log("   - Created Submission Data:", result);
-      console.log("   - Owner Email in Created Record:", result.owner_email);
+      console.log("   - Customer Email in Created Record:", result.customer_email);
       console.log("   - Template ID in Created Record:", result.template_id);
 
       // Increment the counter AFTER successful submission

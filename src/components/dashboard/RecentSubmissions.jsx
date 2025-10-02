@@ -91,7 +91,16 @@ export default function RecentSubmissions({ submissions, isLoading, templates, o
                   </div>
                   <div className="flex items-center gap-1 text-gray-500">
                     <Clock className="w-3 h-3" />
-                    {format(new Date(submission.created_date), "MMM d")}
+                    {(() => {
+                      const date = submission.created_date || submission.submitted_at;
+                      if (!date) return "No date";
+                      try {
+                        const dateObj = new Date(date);
+                        return isNaN(dateObj.getTime()) ? "Invalid date" : format(dateObj, "MMM d");
+                      } catch (error) {
+                        return "Invalid date";
+                      }
+                    })()}
                   </div>
                 </div>
               </Link>

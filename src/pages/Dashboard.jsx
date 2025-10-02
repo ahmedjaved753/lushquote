@@ -1,5 +1,9 @@
 
 import React, { useState, useEffect } from "react";
+
+// 🚨 HACK MODE: Set to true to bypass template limits for testing
+// TODO: Remove this before production deployment
+const BYPASS_TEMPLATE_LIMITS = true;
 import { QuoteTemplate, QuoteSubmission, User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,27 +79,13 @@ export default function Dashboard() {
       console.log("  - Subscription Tier:", currentUser.subscription_tier);
       console.log("  - Full User Object:", currentUser);
 
-      // For free users, check if the monthly counter needs to be reset
-      if (currentUser.subscription_tier === 'free') {
-        const today = new Date();
-        const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-
-        if (currentUser.last_reset_month !== currentMonth) {
-          console.log("Dashboard: New month detected, resetting user submission counter.");
-          await User.updateMyUserData({
-            monthly_submission_count: 0,
-            last_reset_month: currentMonth
-          });
-          // Update the local user object to reflect the change without a re-fetch
-          currentUser.monthly_submission_count = 0;
-          currentUser.last_reset_month = currentMonth;
-        }
-      }
+      // Monthly counter is automatically reset by database triggers
+      // No manual reset needed
 
       setUser(currentUser);
 
       const [userTemplates, submissionsData] = await Promise.all([
-        QuoteTemplate.filter({ created_by: currentUser.email }, "-updated_date"),
+        QuoteTemplate.filter({ user_id: currentUser.id }, "-updated_date"),
         QuoteSubmission.list("-created_date", 1000)
       ]);
 
@@ -238,7 +228,7 @@ export default function Dashboard() {
   };
 
   // Logic for free tier template limit: free users can only create 1 template
-  const canCreateTemplate = user?.subscription_tier === 'premium' || templates.length < 1;
+  const canCreateTemplate = BYPASS_TEMPLATE_LIMITS || user?.subscription_tier === 'premium' || templates.length < 1;
 
 
   return (
