@@ -47,19 +47,36 @@ export default function Dashboard() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    loadData();
-
-    // Check for Stripe redirect query params
+    // Check for Stripe redirect query params FIRST
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('stripe_success')) {
-      toast.success("Upgrade successful! Welcome to LushQuote Premium.");
+    const isStripeSuccess = urlParams.get('stripe_success');
+    const isStripeCanceled = urlParams.get('stripe_canceled');
+    
+    if (isStripeSuccess) {
+      // Give webhook a moment to process, then reload data
+      toast.success("Payment successful! Loading your upgraded account...", {
+        duration: 3000,
+      });
+      
+      // Wait for webhook to process (2 seconds should be enough)
+      setTimeout(() => {
+        loadData().then(() => {
+          toast.success("Welcome to LushQuote Premium! 🎉", {
+            duration: 5000,
+          });
+        });
+      }, 2000);
+      
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
-    }
-    if (urlParams.get('stripe_canceled')) {
+    } else if (isStripeCanceled) {
       toast.error("Your upgrade was canceled. You are still on the free plan.");
+      loadData();
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      // Normal load
+      loadData();
     }
   }, []);
 

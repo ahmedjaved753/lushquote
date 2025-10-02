@@ -13,15 +13,16 @@ const supabase = createClient(
 );
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, stripe-signature',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Max-Age': '86400',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, stripe-signature",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 };
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
       headers: corsHeaders,
@@ -40,7 +41,8 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.text();
-    const event = stripe.webhooks.constructEvent(
+    // Use constructEventAsync for Deno/Edge runtime
+    const event = await stripe.webhooks.constructEventAsync(
       body,
       signature,
       webhookSecret
@@ -61,23 +63,35 @@ Deno.serve(async (req: Request) => {
 
           // Update user profile with subscription details
           if (session.metadata?.supabase_user_id) {
-            await supabase
-              .from("user_profiles")
-              .update({
-                subscription_tier: "premium",
-                subscription_status: "active",
-                stripe_customer_id: session.customer as string,
-                stripe_subscription_id: subscription.id,
-                subscription_current_period_end: new Date(
-                  subscription.current_period_end * 1000
-                ).toISOString(),
-                monthly_submission_count: 0, // Reset counter on upgrade
-              })
-              .eq("id", session.metadata.supabase_user_id);
+            const updateData = {
+              subscription_tier: "premium",
+              subscription_status: "active",
+              stripe_customer_id: session.customer as string,
+              stripe_subscription_id: subscription.id,
+              subscription_current_period_end: new Date(
+                subscription.current_period_end * 1000
+              ).toISOString(),
+              monthly_submission_count: 0, // Reset counter on upgrade
+            };
 
-            console.log(
-              `User ${session.metadata.supabase_user_id} upgraded to premium`
-            );
+            console.log("Updating user profile with data:", updateData);
+
+            const { data, error } = await supabase
+              .from("user_profiles")
+              .update(updateData)
+              .eq("id", session.metadata.supabase_user_id)
+              .select();
+
+            if (error) {
+              console.error("Error updating user profile:", error);
+            } else {
+              console.log("User profile updated successfully:", data);
+              console.log(
+                `✅ User ${session.metadata.supabase_user_id} upgraded to premium`
+              );
+            }
+          } else {
+            console.error("No supabase_user_id in session metadata!");
           }
         }
         break;
@@ -88,7 +102,8 @@ Deno.serve(async (req: Request) => {
 
         // Update subscription details
         const updateData: any = {
-          subscription_status: updatedSubscription.status === "active" ? "active" : "inactive",
+          subscription_status:
+            updatedSubscription.status === "active" ? "active" : "inactive",
           subscription_current_period_end: new Date(
             updatedSubscription.current_period_end * 1000
           ).toISOString(),
