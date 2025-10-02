@@ -99,32 +99,63 @@ Deno.serve(async (req: Request) => {
       case "customer.subscription.updated":
         const updatedSubscription = event.data.object as Stripe.Subscription;
         console.log("Subscription updated:", updatedSubscription.id);
+        console.log("Subscription status:", updatedSubscription.status);
 
-        // Update subscription details
-        const updateData: any = {
-          subscription_status:
-            updatedSubscription.status === "active" ? "active" : "inactive",
-          subscription_current_period_end: new Date(
-            updatedSubscription.current_period_end * 1000
-          ).toISOString(),
-        };
+        // Build update data with proper null checks
+        const updateData: any = {};
 
-        // If subscription is being canceled or past due
-        if (
-          updatedSubscription.status === "canceled" ||
-          updatedSubscription.cancel_at_period_end
-        ) {
+        // Set subscription status
+        if (updatedSubscription.status === "active") {
+          updateData.subscription_status = "active";
+          updateData.subscription_tier = "premium";
+        } else if (updatedSubscription.status === "canceled") {
+          updateData.subscription_status = "canceled";
+          updateData.subscription_tier = "free";
+        } else if (updatedSubscription.status === "past_due") {
+          updateData.subscription_status = "past_due";
+        } else if (updatedSubscription.status === "incomplete") {
+          updateData.subscription_status = "inactive";
+        } else {
+          updateData.subscription_status = "inactive";
+        }
+
+        // Handle cancel_at_period_end flag
+        if (updatedSubscription.cancel_at_period_end) {
           updateData.subscription_status = "canceled";
         }
 
-        if (updatedSubscription.status === "past_due") {
-          updateData.subscription_status = "past_due";
+        // Safely get current_period_end from subscription or subscription items
+        let periodEnd: number | null = null;
+
+        if (updatedSubscription.current_period_end) {
+          periodEnd = updatedSubscription.current_period_end;
+        } else if (updatedSubscription.items?.data?.[0]?.current_period_end) {
+          periodEnd = updatedSubscription.items.data[0].current_period_end;
         }
 
-        await supabase
+        if (periodEnd) {
+          try {
+            updateData.subscription_current_period_end = new Date(
+              periodEnd * 1000
+            ).toISOString();
+          } catch (e) {
+            console.error("Error converting period end date:", e);
+          }
+        }
+
+        console.log("Updating subscription with data:", updateData);
+
+        const { data: subData, error: subError } = await supabase
           .from("user_profiles")
           .update(updateData)
-          .eq("stripe_subscription_id", updatedSubscription.id);
+          .eq("stripe_subscription_id", updatedSubscription.id)
+          .select();
+
+        if (subError) {
+          console.error("Error updating subscription:", subError);
+        } else {
+          console.log("Subscription updated successfully:", subData);
+        }
         break;
 
       case "customer.subscription.deleted":

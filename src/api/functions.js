@@ -2,21 +2,52 @@ import { supabase } from './supabaseClient';
 
 // Supabase Edge Functions for Stripe integration
 export const createCheckoutSession = async () => {
+  console.log('[createCheckoutSession] Starting checkout session creation...');
+  
   // Get current session to pass auth token
   const { data: { session } } = await supabase.auth.getSession();
+  
+  console.log('[createCheckoutSession] Session retrieved:', {
+    hasSession: !!session,
+    hasAccessToken: !!session?.access_token,
+    userId: session?.user?.id,
+    userEmail: session?.user?.email,
+  });
 
+  console.log('[createCheckoutSession] Invoking create-checkout-session edge function...');
+  
   const { data, error } = await supabase.functions.invoke('create-checkout-session', {
     headers: {
       Authorization: `Bearer ${session?.access_token}`,
     },
     body: {}
   });
+  
+  console.log('[createCheckoutSession] Edge function response:', {
+    data,
+    error,
+    hasUrl: !!data?.url,
+  });
+  
+  if (error) {
+    console.error('[createCheckoutSession] ERROR:', error);
+  } else {
+    console.log('[createCheckoutSession] SUCCESS - Checkout URL:', data?.url);
+  }
+  
   return { data, error };
 };
 
 export const createBillingPortalSession = async () => {
+  console.log('[createBillingPortalSession] Starting billing portal session...');
+  
   // Get current session to pass auth token
   const { data: { session } } = await supabase.auth.getSession();
+  
+  console.log('[createBillingPortalSession] Session retrieved:', {
+    hasSession: !!session,
+    hasAccessToken: !!session?.access_token,
+  });
 
   const { data, error } = await supabase.functions.invoke('create-billing-portal-session', {
     headers: {
@@ -24,6 +55,13 @@ export const createBillingPortalSession = async () => {
     },
     body: {}
   });
+  
+  console.log('[createBillingPortalSession] Response:', { data, error });
+  
+  if (error) {
+    console.error('[createBillingPortalSession] ERROR:', error);
+  }
+  
   return { data, error };
 };
 

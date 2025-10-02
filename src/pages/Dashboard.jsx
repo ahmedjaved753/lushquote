@@ -47,42 +47,104 @@ export default function Dashboard() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
+    console.log("=== DASHBOARD MOUNT - STRIPE REDIRECT CHECK ===");
+    
     // Check for Stripe redirect query params FIRST
     const urlParams = new URLSearchParams(window.location.search);
     const isStripeSuccess = urlParams.get('stripe_success');
     const isStripeCanceled = urlParams.get('stripe_canceled');
     
+    console.log("URL Parameters:", {
+      fullURL: window.location.href,
+      search: window.location.search,
+      stripe_success: isStripeSuccess,
+      stripe_canceled: isStripeCanceled,
+    });
+    
     if (isStripeSuccess) {
+      console.log("✅ STRIPE SUCCESS DETECTED - Starting upgrade flow");
+      
       // Give webhook a moment to process, then reload data
       toast.success("Payment successful! Loading your upgraded account...", {
         duration: 3000,
       });
       
+      console.log("⏳ Waiting 2 seconds for webhook to process...");
+      
       // Wait for webhook to process (2 seconds should be enough)
-      setTimeout(() => {
-        loadData().then(() => {
-          toast.success("Welcome to LushQuote Premium! 🎉", {
-            duration: 5000,
+      const checkUpgradeStatus = async (attemptNumber = 1) => {
+        console.log(`⏰ Attempt ${attemptNumber}: Loading user data after payment...`);
+        
+        try {
+          await loadData();
+          console.log("✅ Data loaded successfully after payment");
+          
+          // Get fresh user data by calling User.me() again
+          const freshUser = await User.me();
+          console.log("Fresh user data after reload:", {
+            email: freshUser.email,
+            tier: freshUser.subscription_tier,
+            status: freshUser.subscription_status,
           });
-        });
-      }, 2000);
+          
+          // Check if upgrade was successful
+          if (freshUser?.subscription_tier === 'premium') {
+            console.log("🎉 User successfully upgraded to premium!");
+            toast.success("Welcome to LushQuote Premium! 🎉", {
+              duration: 5000,
+            });
+          } else {
+            console.warn(`⚠️ Attempt ${attemptNumber}: User tier is still: ${freshUser?.subscription_tier}`);
+            
+            if (attemptNumber < 3) {
+              // Try again (max 3 attempts)
+              toast.info("Processing your upgrade... Please wait.", {
+                duration: 3000,
+              });
+              console.log(`⏳ Will retry in 2 seconds (attempt ${attemptNumber + 1}/3)...`);
+              setTimeout(() => checkUpgradeStatus(attemptNumber + 1), 2000);
+            } else {
+              console.error("❌ Failed to detect upgrade after 3 attempts");
+              toast.warning("Payment processed! If you don't see Premium status, please refresh the page.", {
+                duration: 8000,
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`❌ ERROR loading data (attempt ${attemptNumber}):`, error);
+          toast.error("There was an error loading your account. Please refresh the page.", {
+            duration: 6000,
+          });
+        }
+      };
+      
+      // Start checking after 2 seconds
+      setTimeout(() => checkUpgradeStatus(1), 2000);
       
       // Clean up URL
+      console.log("🧹 Cleaning up URL parameters");
       window.history.replaceState({}, document.title, window.location.pathname);
+      
     } else if (isStripeCanceled) {
+      console.log("❌ STRIPE CANCELED DETECTED");
       toast.error("Your upgrade was canceled. You are still on the free plan.");
       loadData();
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
+      
     } else {
       // Normal load
+      console.log("📋 Normal dashboard load (no Stripe redirect)");
       loadData();
     }
   }, []);
 
   const loadData = async () => {
+    console.log("🔄 loadData() called at:", new Date().toISOString());
     setIsLoading(true);
+    
     try {
+      console.log("📡 Fetching current user data from User.me()...");
       const currentUser = await User.me();
 
       // **ADD COMPREHENSIVE DASHBOARD LOADING LOG**
@@ -91,6 +153,10 @@ export default function Dashboard() {
       console.log("  - Email:", currentUser.email);
       console.log("  - Role:", currentUser.role);
       console.log("  - Subscription Tier:", currentUser.subscription_tier);
+      console.log("  - Subscription Status:", currentUser.subscription_status);
+      console.log("  - Stripe Customer ID:", currentUser.stripe_customer_id);
+      console.log("  - Stripe Subscription ID:", currentUser.stripe_subscription_id);
+      console.log("  - Monthly Submission Count:", currentUser.monthly_submission_count);
       console.log("  - Full User Object:", currentUser);
 
       // Monthly counter is automatically reset by database triggers
@@ -155,11 +221,20 @@ export default function Dashboard() {
       setTemplates(userTemplates);
       setSubmissions(userVisibleSubmissions); // This is for the main stats
       setPersonalSubmissions(personalSubs); // This is specifically for the "Recent Submissions" list
+      
+      console.log("=== END DASHBOARD LOAD LOG ===");
+      console.log("✅ loadData() completed successfully");
 
     } catch (error) {
-      console.error("Error loading dashboard data:", error);
+      console.error("❌ ERROR in loadData():", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
     }
     setIsLoading(false);
+    console.log("🏁 loadData() finished, isLoading set to false");
   };
 
   const copyTemplateLink = async (template) => {
@@ -217,16 +292,30 @@ export default function Dashboard() {
   };
 
   const handleUpgrade = async () => {
+    console.log("💳 handleUpgrade() called - Starting checkout process");
     setIsRedirecting(true);
+    
     try {
+      console.log("📡 Calling createCheckoutSession()...");
       const response = await createCheckoutSession();
+      
+      console.log("✅ Checkout session response received:", response);
+      
       if (response.data.url) {
+        console.log("🔗 Redirecting to Stripe checkout URL:", response.data.url);
         window.location.href = response.data.url;
       } else {
+        console.error("❌ No URL in checkout session response:", response);
         toast.error("Could not start upgrade process. Please try again.");
+        setIsRedirecting(false);
       }
     } catch (error) {
-      console.error("Error creating checkout session:", error);
+      console.error("❌ ERROR creating checkout session:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       toast.error("An error occurred. Please try again later.");
       setIsRedirecting(false);
     }

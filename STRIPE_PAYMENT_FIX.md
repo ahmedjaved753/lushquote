@@ -2,7 +2,7 @@
 
 ## Issues Fixed ✅
 
-### 1. **Webhook Error** (CRITICAL - Now Fixed)
+### 1. **Webhook Error - Part A** (CRITICAL - Now Fixed)
 
 **Problem:** Webhook was failing with error:
 
@@ -30,6 +30,48 @@ const event = await stripe.webhooks.constructEventAsync(
 );
 ```
 
+### 1. **Webhook Error - Part B** (CRITICAL - Now Fixed)
+
+**Problem:** Webhook was still failing with error after Part A fix:
+
+```json
+{
+  "error": "Invalid time value"
+}
+```
+
+**Root Cause:** The `customer.subscription.updated` webhook event sometimes doesn't include `current_period_end` at the subscription level. It's nested in `subscription.items.data[0].current_period_end` instead. Trying to create a Date object with `undefined` caused the error.
+
+**Solution:** Implemented robust null checks and fallback logic:
+
+```typescript
+// Safely get current_period_end from subscription or subscription items
+let periodEnd: number | null = null;
+
+if (updatedSubscription.current_period_end) {
+  periodEnd = updatedSubscription.current_period_end;
+} else if (updatedSubscription.items?.data?.[0]?.current_period_end) {
+  periodEnd = updatedSubscription.items.data[0].current_period_end;
+}
+
+if (periodEnd) {
+  try {
+    updateData.subscription_current_period_end = new Date(
+      periodEnd * 1000
+    ).toISOString();
+  } catch (e) {
+    console.error("Error converting period end date:", e);
+  }
+}
+```
+
+**Additional Improvements:**
+
+- Added comprehensive status handling for all subscription states
+- Proper tier updates (premium/free) based on status
+- Enhanced logging for debugging
+- Error handling with try-catch blocks
+
 ### 2. **Success Page Quick Redirect** (Now Fixed)
 
 **Problem:** After successful payment, the success page would flash and redirect too quickly without showing the upgraded status.
@@ -52,6 +94,35 @@ const event = await stripe.webhooks.constructEventAsync(
 - Fixed webhook to properly process events
 - Added comprehensive logging to track upgrade process
 - Added error handling to catch and log any database update issues
+
+## Webhook Events Handled
+
+Your webhook now properly handles these Stripe events:
+
+### 1. `checkout.session.completed`
+
+- **When:** User completes payment on Stripe checkout page
+- **Action:** Updates user to premium, saves customer ID, subscription ID, resets monthly counter
+- **Status:** ✅ Fully working
+
+### 2. `customer.subscription.updated`
+
+- **When:** Subscription changes (incomplete → active, active → canceled, etc.)
+- **Action:** Updates subscription status and tier based on new status
+- **Status:** ✅ Fixed with robust null checks
+- **Note:** This is the event that was causing "Invalid time value" errors
+
+### 3. `customer.subscription.deleted`
+
+- **When:** Subscription is permanently deleted
+- **Action:** Downgrades user to free tier
+- **Status:** ✅ Working
+
+### 4. `invoice.payment_failed`
+
+- **When:** Recurring payment fails
+- **Action:** Marks subscription as past_due
+- **Status:** ✅ Working
 
 ## What Happens Now (Expected Flow)
 
@@ -144,6 +215,8 @@ supabase functions logs stripe-webhook --follow
 
 ### Expected Webhook Logs:
 
+**For `checkout.session.completed`:**
+
 ```
 Received webhook event: checkout.session.completed
 Checkout session completed: cs_test_xxxxx
@@ -158,6 +231,22 @@ Updating user profile with data: {
 User profile updated successfully: [...]
 ✅ User abcd-1234-efgh-5678 upgraded to premium
 ```
+
+**For `customer.subscription.updated`:**
+
+```
+Received webhook event: customer.subscription.updated
+Subscription updated: sub_xxxxx
+Subscription status: active
+Updating subscription with data: {
+  subscription_status: "active",
+  subscription_tier: "premium",
+  subscription_current_period_end: "2025-11-02T..."
+}
+Subscription updated successfully: [...]
+```
+
+**Note:** Both events may fire during a successful checkout. This is normal and expected!
 
 ## Troubleshooting
 
@@ -239,5 +328,15 @@ Before going live:
 
 ---
 
-**Last Updated:** October 2, 2025
-**Status:** ✅ All Issues Fixed & Deployed
+## Summary of All Fixes
+
+1. ✅ **Fixed `constructEvent` → `constructEventAsync`** for Deno compatibility
+2. ✅ **Fixed "Invalid time value" error** with robust null checks and fallback logic
+3. ✅ **Enhanced subscription status handling** for all states (active, canceled, incomplete, past_due)
+4. ✅ **Added comprehensive logging** to track webhook processing
+5. ✅ **Improved success page handling** with delayed data reload
+6. ✅ **Error handling** with try-catch blocks everywhere
+
+**Last Updated:** October 2, 2025 (12:15 PM PST)
+**Status:** ✅ All Webhook Issues Fixed & Deployed
+**Deployment:** Successfully deployed to Supabase Edge Functions
