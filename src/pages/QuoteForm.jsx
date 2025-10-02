@@ -486,17 +486,21 @@ export default function QuoteForm() {
       console.log("   - Customer Email in Created Record:", result.customer_email);
       console.log("   - Template ID in Created Record:", result.template_id);
 
-      // Increment the counter AFTER successful submission
-      if (template.owner_subscription_tier === 'free') {
-          console.log("7. Incrementing submission counter for free user...");
-          await incrementSubmissionCounter({
-              owner_email: template.owner_email,
-              owner_subscription_tier: template.owner_subscription_tier
-          });
+      // Increment the counter AFTER successful submission (for all users, not just free)
+      console.log("7. Incrementing submission counter for template owner...");
+      console.log("   - Template ID:", template.id);
+      console.log("   - Owner Email:", template.owner_email);
+      console.log("   - Owner Tier:", template.owner_subscription_tier);
+
+      const { error: incrementError } = await incrementSubmissionCounter(template.id);
+
+      if (incrementError) {
+          console.error("ERROR: Failed to increment submission counter:", incrementError);
+      } else {
           console.log("8. Counter incremented successfully.");
       }
 
-      console.log("7. SUCCESS: Quote submission completed successfully!");
+      console.log("9. SUCCESS: Quote submission completed successfully!");
 
       setIsSubmitted(true);
 
