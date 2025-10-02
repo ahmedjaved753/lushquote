@@ -5,6 +5,10 @@ import { QuoteTemplate, User } from "@/api/entities";
 // 🚨 HACK MODE: Set to true to bypass template limits for testing
 // TODO: Remove this before production deployment
 const BYPASS_TEMPLATE_LIMITS = true;
+
+// 🚨 HACK MODE: Set to true to allow footer customization in free mode for testing
+// TODO: Set to false before production deployment (footer customization is a Premium feature)
+const BYPASS_FOOTER_RESTRICTIONS = true;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle }
   from "@/components/ui/card";
@@ -167,10 +171,10 @@ export default function TemplateBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
   
-  // ENFORCE FREE TIER BRANDING
+  // ENFORCE FREE TIER BRANDING (unless BYPASS_FOOTER_RESTRICTIONS is enabled)
   useEffect(() => {
     const evaluatedTier = user?.subscription_tier || 'free'; // Fix: Use evaluated tier
-    if (evaluatedTier === 'free' && template) {
+    if (evaluatedTier === 'free' && template && !BYPASS_FOOTER_RESTRICTIONS) {
       // Prevent infinite loop by only setting state if it's different
       if (template.footer_enabled !== true || template.footer_text !== "This quote template was made on LushQuote. Create your own quotes instantly and streamline your business today!") {
         setTemplate(prev => ({
@@ -179,6 +183,11 @@ export default function TemplateBuilder() {
           footer_text: "This quote template was made on LushQuote. Create your own quotes instantly and streamline your business today!"
         }));
       }
+    }
+
+    // 🚨 HACK MODE ACTIVE: Log when bypass is enabled
+    if (BYPASS_FOOTER_RESTRICTIONS && evaluatedTier === 'free') {
+      console.log("%c🚨 HACK MODE: Footer restrictions bypassed for free tier", "color: orange; font-weight: bold;");
     }
   }, [user, template]);
 
@@ -216,9 +225,12 @@ export default function TemplateBuilder() {
         owner_subscription_tier: evaluatedTier, // Fix: Use evaluated tier
       };
       
-      if (evaluatedTier === 'free') { // Fix: Use evaluated tier
+      // Enforce footer branding for free tier (unless BYPASS_FOOTER_RESTRICTIONS is enabled)
+      if (evaluatedTier === 'free' && !BYPASS_FOOTER_RESTRICTIONS) {
           finalTemplateData.footer_enabled = true;
           finalTemplateData.footer_text = "This quote template was made on LushQuote. Create your own quotes instantly and streamline your business today!";
+      } else if (evaluatedTier === 'free' && BYPASS_FOOTER_RESTRICTIONS) {
+          console.log("%c🚨 HACK MODE: Saving template with custom footer (normally restricted to Premium)", "color: orange; font-weight: bold;");
       }
 
       // **ADD COMPREHENSIVE LOGGING FOR TEMPLATE CREATION/UPDATE**
@@ -294,7 +306,8 @@ export default function TemplateBuilder() {
     setTemplate(prev => ({ ...prev, services: items }));
   };
 
-  const isPremium = (user?.subscription_tier || 'free') === 'premium'; // Fix: Ensure subscription_tier defaults to 'free'
+  // 🚨 HACK: When BYPASS_FOOTER_RESTRICTIONS is true, treat free users as premium for footer controls
+  const isPremium = (user?.subscription_tier || 'free') === 'premium' || BYPASS_FOOTER_RESTRICTIONS;
 
   // **Definitive Loading and Blocking Logic**
   if (isLoading && !showUpgradeDialog) { // Only show loading if we're not showing the upgrade dialog instead
