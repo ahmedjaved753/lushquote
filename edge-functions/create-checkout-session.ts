@@ -12,9 +12,22 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -22,7 +35,7 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "No authorization header" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
@@ -34,7 +47,7 @@ Deno.serve(async (req: Request) => {
 
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
@@ -49,7 +62,7 @@ Deno.serve(async (req: Request) => {
     const priceId = Deno.env.get("STRIPE_PRICE_ID");
     if (!priceId) {
       return new Response(JSON.stringify({ error: "Stripe price not configured" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       });
     }
@@ -93,13 +106,13 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error) {
     console.error("Error creating checkout session:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }

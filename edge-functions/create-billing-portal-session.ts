@@ -12,9 +12,22 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -22,7 +35,7 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "No authorization header" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
@@ -34,7 +47,7 @@ Deno.serve(async (req: Request) => {
 
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
@@ -50,7 +63,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ error: "No Stripe customer found. Please subscribe first." }),
         {
-          headers: { "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
         }
       );
@@ -65,13 +78,13 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(JSON.stringify({ url: portalSession.url }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error) {
     console.error("Error creating billing portal session:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
