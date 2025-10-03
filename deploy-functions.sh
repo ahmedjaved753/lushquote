@@ -28,6 +28,10 @@ echo "📦 Deploying stripe-webhook..."
 supabase functions deploy stripe-webhook --no-verify-jwt
 
 echo ""
+echo "📦 Deploying send-quote-notification..."
+supabase functions deploy send-quote-notification --no-verify-jwt
+
+echo ""
 echo "✅ All functions deployed successfully!"
 echo ""
 echo "📋 Verifying deployment..."
