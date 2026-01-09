@@ -93,6 +93,7 @@ export const getTemplatePublicData = async (templateId) => {
         business_name,
         description,
         branding,
+        services,
         is_active,
         request_date_enabled,
         request_date_optional,
@@ -122,30 +123,20 @@ export const getTemplatePublicData = async (templateId) => {
       return { data: null, error: { message: 'Template not found or inactive' } };
     }
 
-    // Get services from separate table
-    const { data: services, error: servicesError } = await supabase
-      .from('template_services')
-      .select('*')
-      .eq('template_id', templateId)
-      .order('sort_order', { ascending: true });
-
-    console.log('[getTemplatePublicData] Services query result:', { services, servicesError });
-
-    if (servicesError) {
-      console.error('Error getting services for public template:', servicesError);
-      // Don't fail, just return empty services
-    }
+    // Get services from JSONB column in template (more reliable than separate table)
+    const services = template.services || [];
+    console.log('[getTemplatePublicData] Services from JSONB:', services);
 
     // Map services to UI format
-    const uiServices = (services || []).map(service => ({
-      id: service.temp_id || service.id,
+    const uiServices = services.map(service => ({
+      id: service.id,
       name: service.name,
       description: service.description,
-      type: service.type,
+      type: service.type || 'fixed',
       price: parseFloat(service.price || 0),
       unit_label: service.unit_label,
       frequency: service.frequency,
-      selection_method: service.selection_method,
+      selection_method: service.selection_method || 'checkbox',
       min_quantity: service.min_quantity,
       max_quantity: service.max_quantity,
       default_quantity: service.default_quantity,

@@ -197,7 +197,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
       
-      const { data: profile, error: profileError } = result;
+      let { data: profile, error: profileError } = result;
       console.log('[useAuth] Profile query result:', { 
         hasProfile: !!profile, 
         hasError: !!profileError,
