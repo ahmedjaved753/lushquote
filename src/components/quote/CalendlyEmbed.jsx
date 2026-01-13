@@ -67,13 +67,12 @@ export default function CalendlyEmbed({
       return;
     }
 
-    // Remove any existing broken script tags and start fresh
-    const existingScripts = document.querySelectorAll('script[src*="calendly.com/assets/external/widget.js"]');
-    existingScripts.forEach(s => s.remove());
+    // Remove any existing Calendly script tags to avoid caching issues
+    document.querySelectorAll('script[src*="calendly.com/assets/external/widget"]').forEach(s => s.remove());
 
-    // Create and load script fresh
+    // Create and load script with cache-busting to avoid browser caching issues
     const script = document.createElement('script');
-    script.src = 'https://assets.calendly.com/assets/external/widget.js';
+    script.src = `https://assets.calendly.com/assets/external/widget.js?v=${Date.now()}`;
     script.async = true;
 
     // Use both onload callback and polling for robustness
@@ -99,7 +98,8 @@ export default function CalendlyEmbed({
       clearInterval(checkCalendly);
     };
 
-    document.head.appendChild(script);
+    // Append to body instead of head for better execution
+    document.body.appendChild(script);
 
     // Clean up interval after 15 seconds
     const timeout = setTimeout(() => {
