@@ -67,32 +67,52 @@ export default function CalendlyEmbed({
       return;
     }
 
-    // Check if script already exists
-    const existingScript = document.querySelector('script[src*="calendly.com/assets/external/widget.js"]');
-    if (existingScript) {
-      // Script exists, wait for it to load
-      const checkCalendly = setInterval(() => {
+    // Remove any existing broken script tags and start fresh
+    const existingScripts = document.querySelectorAll('script[src*="calendly.com/assets/external/widget.js"]');
+    existingScripts.forEach(s => s.remove());
+
+    // Create and load script fresh
+    const script = document.createElement('script');
+    script.src = 'https://assets.calendly.com/assets/external/widget.js';
+    script.async = true;
+
+    // Use both onload callback and polling for robustness
+    const checkCalendly = setInterval(() => {
+      if (window.Calendly) {
+        setScriptLoaded(true);
+        clearInterval(checkCalendly);
+      }
+    }, 100);
+
+    script.onload = () => {
+      // Give it a moment after load event
+      setTimeout(() => {
         if (window.Calendly) {
           setScriptLoaded(true);
           clearInterval(checkCalendly);
         }
       }, 100);
-      // Clean up interval after 10 seconds
-      setTimeout(() => clearInterval(checkCalendly), 10000);
-      return;
-    }
-
-    // Create and load script
-    const script = document.createElement('script');
-    script.src = 'https://assets.calendly.com/assets/external/widget.js';
-    script.async = true;
-    script.onload = () => {
-      setScriptLoaded(true);
     };
+
     script.onerror = () => {
       console.error('Failed to load Calendly widget script');
+      clearInterval(checkCalendly);
     };
+
     document.head.appendChild(script);
+
+    // Clean up interval after 15 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(checkCalendly);
+      if (!window.Calendly) {
+        console.error('Calendly script timeout - window.Calendly not available');
+      }
+    }, 15000);
+
+    return () => {
+      clearInterval(checkCalendly);
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Initialize widget when script is loaded and container is ready
