@@ -60,46 +60,20 @@ export default function CalendlyEmbed({
     };
   }, [onEventScheduled]);
 
-  // Load Calendly script
+  // Wait for Calendly script to be available (loaded from index.html)
   useEffect(() => {
     if (window.Calendly) {
       setScriptLoaded(true);
       return;
     }
 
-    // Remove any existing Calendly script tags to avoid caching issues
-    document.querySelectorAll('script[src*="calendly.com/assets/external/widget"]').forEach(s => s.remove());
-
-    // Create and load script with cache-busting to avoid browser caching issues
-    const script = document.createElement('script');
-    script.src = `https://assets.calendly.com/assets/external/widget.js?v=${Date.now()}`;
-    script.async = true;
-
-    // Use both onload callback and polling for robustness
+    // Poll for Calendly to become available (script is loaded async from index.html)
     const checkCalendly = setInterval(() => {
       if (window.Calendly) {
         setScriptLoaded(true);
         clearInterval(checkCalendly);
       }
     }, 100);
-
-    script.onload = () => {
-      // Give it a moment after load event
-      setTimeout(() => {
-        if (window.Calendly) {
-          setScriptLoaded(true);
-          clearInterval(checkCalendly);
-        }
-      }, 100);
-    };
-
-    script.onerror = () => {
-      console.error('Failed to load Calendly widget script');
-      clearInterval(checkCalendly);
-    };
-
-    // Append to body instead of head for better execution
-    document.body.appendChild(script);
 
     // Clean up interval after 15 seconds
     const timeout = setTimeout(() => {
