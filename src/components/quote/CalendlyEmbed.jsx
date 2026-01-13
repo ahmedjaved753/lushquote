@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 
 export default function CalendlyEmbed({
   schedulingUrl,
@@ -7,7 +7,8 @@ export default function CalendlyEmbed({
   onEventScheduled,
 }) {
   const containerRef = useRef(null);
-  const scriptLoadedRef = useRef(false);
+  const [scriptLoaded, setScriptLoaded] = useState(!!window.Calendly);
+  const widgetInitializedRef = useRef(false);
 
   // Build the embed URL with prefill parameters
   const buildEmbedUrl = useCallback(() => {
@@ -59,38 +60,67 @@ export default function CalendlyEmbed({
     };
   }, [onEventScheduled]);
 
+  // Load Calendly script
   useEffect(() => {
-    // Load Calendly widget script if not already loaded
-    if (!scriptLoadedRef.current && !window.Calendly) {
-      const script = document.createElement('script');
-      script.src = 'https://assets.calendly.com/assets/external/widget.js';
-      script.async = true;
-      script.onload = () => {
-        scriptLoadedRef.current = true;
-        initWidget();
-      };
-      document.body.appendChild(script);
-    } else if (window.Calendly) {
-      initWidget();
+    if (window.Calendly) {
+      setScriptLoaded(true);
+      return;
     }
 
-    function initWidget() {
-      if (containerRef.current && window.Calendly) {
-        // Clear any existing content
-        containerRef.current.innerHTML = '';
-
-        // Initialize inline widget
-        window.Calendly.initInlineWidget({
-          url: buildEmbedUrl(),
-          parentElement: containerRef.current,
-          prefill: {
-            name: prefillData.name || '',
-            email: prefillData.email || '',
-          },
-        });
-      }
+    // Check if script already exists
+    const existingScript = document.querySelector('script[src*="calendly.com/assets/external/widget.js"]');
+    if (existingScript) {
+      // Script exists, wait for it to load
+      const checkCalendly = setInterval(() => {
+        if (window.Calendly) {
+          setScriptLoaded(true);
+          clearInterval(checkCalendly);
+        }
+      }, 100);
+      // Clean up interval after 10 seconds
+      setTimeout(() => clearInterval(checkCalendly), 10000);
+      return;
     }
-  }, [buildEmbedUrl, prefillData]);
+
+    // Create and load script
+    const script = document.createElement('script');
+    script.src = 'https://assets.calendly.com/assets/external/widget.js';
+    script.async = true;
+    script.onload = () => {
+      setScriptLoaded(true);
+    };
+    script.onerror = () => {
+      console.error('Failed to load Calendly widget script');
+    };
+    document.head.appendChild(script);
+  }, []);
+
+  // Initialize widget when script is loaded and container is ready
+  useEffect(() => {
+    if (!scriptLoaded || !window.Calendly || !containerRef.current || !schedulingUrl) {
+      return;
+    }
+
+    // Prevent re-initialization
+    if (widgetInitializedRef.current) {
+      return;
+    }
+
+    widgetInitializedRef.current = true;
+
+    // Clear any existing content
+    containerRef.current.innerHTML = '';
+
+    // Initialize inline widget
+    window.Calendly.initInlineWidget({
+      url: buildEmbedUrl(),
+      parentElement: containerRef.current,
+      prefill: {
+        name: prefillData.name || '',
+        email: prefillData.email || '',
+      },
+    });
+  }, [scriptLoaded, schedulingUrl, buildEmbedUrl, prefillData]);
 
   if (!schedulingUrl) {
     return (
