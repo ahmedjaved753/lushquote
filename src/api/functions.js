@@ -84,7 +84,7 @@ export const getTemplatePublicData = async (templateId) => {
   try {
     console.log('[getTemplatePublicData] Starting fetch for template:', templateId);
     console.log('[getTemplatePublicData] Supabase client:', supabase);
-    
+
     // Get template data (only active templates are public)
     const { data: template, error: templateError } = await supabase
       .from('quote_templates')
@@ -105,7 +105,9 @@ export const getTemplatePublicData = async (templateId) => {
         footer_text,
         owner_email,
         owner_subscription_tier,
-        created_at
+        created_at,
+        use_calendly_scheduling,
+        calendly_event_type_id
       `)
       .eq('id', templateId)
       .eq('is_active', true)
@@ -121,6 +123,35 @@ export const getTemplatePublicData = async (templateId) => {
     if (!template) {
       console.error('Template not found or inactive');
       return { data: null, error: { message: 'Template not found or inactive' } };
+    }
+
+    // Fetch Calendly event type if template uses Calendly scheduling
+    let calendlyEventType = null;
+    if (template.use_calendly_scheduling && template.calendly_event_type_id) {
+      const { data: eventType, error: eventTypeError } = await supabase
+        .from('calendly_event_types')
+        .select('id, name, duration_minutes, scheduling_url')
+        .eq('id', template.calendly_event_type_id)
+        .single();
+
+      if (!eventTypeError && eventType) {
+        calendlyEventType = eventType;
+        console.log('[getTemplatePublicData] Calendly event type:', eventType);
+      }
+    }
+
+    // Get owner's timezone from user_profiles
+    let ownerTimezone = 'UTC';
+    if (template.owner_email) {
+      const { data: ownerProfile } = await supabase
+        .from('user_profiles')
+        .select('time_zone')
+        .eq('email', template.owner_email)
+        .single();
+
+      if (ownerProfile?.time_zone) {
+        ownerTimezone = ownerProfile.time_zone;
+      }
     }
 
     // Get services from JSONB column in template (more reliable than separate table)
@@ -148,17 +179,19 @@ export const getTemplatePublicData = async (templateId) => {
       data: {
         template: {
           ...template,
-          services: uiServices
+          services: uiServices,
+          calendly_event_type: calendlyEventType
         },
         owner: {
           subscription_tier: template.owner_subscription_tier,
           monthly_submission_count: 0, // We'll handle limit checking in backend
-          email: template.owner_email
+          email: template.owner_email,
+          time_zone: ownerTimezone
         }
       },
       error: null
     };
-    
+
     console.log('[getTemplatePublicData] Returning result:', result);
     return result;
   } catch (error) {

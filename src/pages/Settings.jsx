@@ -10,11 +10,12 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Save, User as UserIcon, Palette, Bell, Download, AlertTriangle, Loader2, ArrowLeft, Star, CreditCard } from "lucide-react";
+import { Save, User as UserIcon, Palette, Bell, Download, AlertTriangle, Loader2, ArrowLeft, Star, CreditCard, Calendar, ExternalLink, RefreshCw, Unlink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { createCheckoutSession } from "@/api/functions";
 import { createBillingPortalSession } from "@/api/functions";
+import { supabase } from "@/api/supabaseClient";
 
 // A simplified list of timezones for the dropdown
 const timezones = [
@@ -40,6 +41,8 @@ export default function Settings() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCalendlyLoading, setIsCalendlyLoading] = useState(false);
+  const [isSyncingCalendly, setIsSyncingCalendly] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -61,6 +64,31 @@ export default function Settings() {
       }
     };
     fetchUser();
+  }, []);
+
+  // Handle Calendly OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const calendlyConnected = urlParams.get('calendly_connected');
+    const calendlyError = urlParams.get('calendly_error');
+
+    if (calendlyConnected === 'true') {
+      toast.success("Calendly connected successfully! Your event types have been synced.");
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Refresh user data
+      User.me().then(setUser);
+    } else if (calendlyError) {
+      const errorMessages = {
+        'auth_failed': 'Failed to connect to Calendly. Please try again.',
+        'token_exchange': 'Failed to authenticate with Calendly.',
+        'user_fetch': 'Failed to fetch your Calendly account info.',
+        'save_tokens': 'Failed to save Calendly connection.',
+        'unknown': 'An unexpected error occurred.'
+      };
+      toast.error(errorMessages[calendlyError] || 'Failed to connect Calendly.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   const handleInputChange = (key, value) => {
@@ -120,6 +148,58 @@ export default function Settings() {
       console.error("Stripe portal error:", error);
       toast.error("Could not open billing portal. Please try again.");
       setIsRedirecting(false);
+    }
+  };
+
+  const handleConnectCalendly = () => {
+    if (!user?.id) {
+      toast.error("Please wait for your account to load.");
+      return;
+    }
+    const clientId = import.meta.env.VITE_CALENDLY_CLIENT_ID;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const redirectUri = `${supabaseUrl}/functions/v1/calendly-oauth-callback`;
+    const authUrl = `https://auth.calendly.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${user.id}`;
+    window.location.href = authUrl;
+  };
+
+  const handleDisconnectCalendly = async () => {
+    if (!confirm("Are you sure you want to disconnect Calendly? Templates using Calendly scheduling will fall back to simple date/time pickers.")) {
+      return;
+    }
+    setIsCalendlyLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { error } = await supabase.functions.invoke('calendly-disconnect', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      toast.success("Calendly disconnected successfully.");
+      // Refresh user data
+      const updatedUser = await User.me();
+      setUser(updatedUser);
+    } catch (error) {
+      console.error("Calendly disconnect error:", error);
+      toast.error("Failed to disconnect Calendly.");
+    } finally {
+      setIsCalendlyLoading(false);
+    }
+  };
+
+  const handleSyncCalendly = async () => {
+    setIsSyncingCalendly(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('calendly-sync-event-types', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      toast.success(`Synced ${data?.count || 0} event types from Calendly.`);
+    } catch (error) {
+      console.error("Calendly sync error:", error);
+      toast.error("Failed to sync event types.");
+    } finally {
+      setIsSyncingCalendly(false);
     }
   };
 
@@ -341,6 +421,91 @@ export default function Settings() {
               </div>
               <Switch checked={settings.email_notifications_enabled} onCheckedChange={value => handleInputChange('email_notifications_enabled', value)} />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Calendly Integration Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" /> Calendly Integration
+            </CardTitle>
+            <CardDescription>
+              Connect your Calendly account to enable scheduling on quote forms
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {user?.subscription_tier !== 'premium' ? (
+              // Show upgrade prompt for free users
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-amber-600 text-lg">🔒</span>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-amber-800 mb-1">Premium Feature</h4>
+                    <p className="text-sm text-amber-700 mb-3">
+                      Calendly integration is available with Premium subscription. Allow customers to book appointments directly from your quote forms.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                      onClick={handleUpgrade}
+                      disabled={isRedirecting}
+                    >
+                      {isRedirecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Star className="w-4 h-4 mr-2" />}
+                      {isRedirecting ? 'Redirecting...' : 'Upgrade to Premium'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : user?.calendly_access_token ? (
+              // Show connected state
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="font-medium">Connected to Calendly</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Connected on {user.calendly_connected_at ? new Date(user.calendly_connected_at).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncCalendly}
+                    disabled={isSyncingCalendly}
+                  >
+                    {isSyncingCalendly ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    {isSyncingCalendly ? 'Syncing...' : 'Sync Event Types'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={handleDisconnectCalendly}
+                    disabled={isCalendlyLoading}
+                  >
+                    {isCalendlyLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Unlink className="w-4 h-4 mr-2" />}
+                    Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // Show connect button
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Connect your Calendly account to let customers schedule appointments directly from your quote forms.
+                </p>
+                <Button onClick={handleConnectCalendly} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Connect Calendly
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 

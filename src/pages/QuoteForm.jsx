@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Loader2, ArrowLeft, Home, CalendarIcon, X } from "lucide-react";
+import { CheckCircle, Loader2, ArrowLeft, Home, CalendarIcon, X, Clock } from "lucide-react";
+import CalendlyEmbed from "@/components/quote/CalendlyEmbed";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { format, formatISO } from "date-fns";
@@ -161,6 +162,9 @@ export default function QuoteForm() {
   const [submissionError, setSubmissionError] = useState(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [isOverLimit, setIsOverLimit] = useState(false); // Add over limit state
+  const [calendlyEventScheduled, setCalendlyEventScheduled] = useState(false);
+  const [scheduledEventData, setScheduledEventData] = useState(null);
+  const [ownerTimezone, setOwnerTimezone] = useState('UTC');
 
   console.log(`[QuoteForm Debug] Current selections state:`, selections);
 
@@ -251,6 +255,9 @@ export default function QuoteForm() {
         }
 
         setTemplate(finalTemplate);
+
+        // Set owner timezone for Calendly display
+        setOwnerTimezone(owner.time_zone || 'UTC');
 
         // If we have a submission ID, we're in viewing mode
         if (submissionId) {
@@ -405,14 +412,22 @@ export default function QuoteForm() {
       return;
     }
 
-    // Updated validation for optional date/time
-    if (template.request_date_enabled && !template.request_date_optional && !requestedDate) {
-      setSubmissionError("Please select a preferred date.");
+    // Validate Calendly scheduling if enabled
+    if (template.use_calendly_scheduling && !calendlyEventScheduled) {
+      setSubmissionError("Please schedule an appointment before submitting.");
       return;
     }
-    if (template.request_time_enabled && !template.request_time_optional && !requestedTime) {
-      setSubmissionError("Please select a preferred time.");
-      return;
+
+    // Updated validation for optional date/time (only if not using Calendly)
+    if (!template.use_calendly_scheduling) {
+      if (template.request_date_enabled && !template.request_date_optional && !requestedDate) {
+        setSubmissionError("Please select a preferred date.");
+        return;
+      }
+      if (template.request_time_enabled && !template.request_time_optional && !requestedTime) {
+        setSubmissionError("Please select a preferred time.");
+        return;
+      }
     }
 
     console.log("   - VALIDATION PASSED: All required fields present");
@@ -452,6 +467,13 @@ export default function QuoteForm() {
         requested_date: requestedDate ? formatISO(requestedDate, { representation: 'date' }) : null,
         requested_time: requestedTime || null,
         status: 'new', // Set initial status to 'new'
+        // Add Calendly event data if scheduled
+        ...(scheduledEventData && {
+          calendly_event_uri: scheduledEventData.eventUri,
+          calendly_invitee_uri: scheduledEventData.inviteeUri,
+          calendly_event_start_time: scheduledEventData.startTime,
+          calendly_event_end_time: scheduledEventData.endTime,
+        }),
       };
 
       // ADD COMPREHENSIVE SUBMISSION LOGGING
@@ -752,64 +774,131 @@ export default function QuoteForm() {
 
               <Separator />
 
-              {/* Date/Time Request Section */}
-              {(template.request_date_enabled || template.request_time_enabled) && (
+              {/* Date/Time Request Section - Calendly or Simple Pickers */}
+              {template.use_calendly_scheduling && template.calendly_event_type ? (
+                // Calendly Scheduling Section (Premium feature)
                 <div className="space-y-6">
-                  {template.request_date_enabled && (
-                    <div className="space-y-2">
-                      <Label className="text-xl font-bold text-gray-900 flex items-center justify-center sm:justify-start">
-                        Requested Date
-                        {template.request_date_optional && <span className="text-sm font-normal text-gray-500 ml-2">(optional)</span>}
-                      </Label>
-                      <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={`w-full justify-center sm:justify-start text-center sm:text-left font-normal h-12 ${!requestedDate && "text-muted-foreground"}`}
-                            disabled={isViewingSubmission}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {requestedDate ? format(requestedDate, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={requestedDate}
-                            onSelect={(date) => {
-                              setRequestedDate(date);
-                              setDatePickerOpen(false); // Close popover after selection
-                            }}
-                            initialFocus
-                            disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() - 1)) || isViewingSubmission}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                  <h3 className="text-xl font-bold text-gray-900 text-center sm:text-left">Schedule Your Appointment</h3>
+
+                  {!calendlyEventScheduled ? (
+                    // Show Calendly embed for scheduling
+                    <div className="border rounded-lg overflow-hidden">
+                      <CalendlyEmbed
+                        schedulingUrl={template.calendly_event_type.scheduling_url}
+                        prefillData={{
+                          name: customerInfo.name,
+                          email: customerInfo.email,
+                        }}
+                        ownerTimezone={ownerTimezone}
+                        onEventScheduled={(eventData) => {
+                          console.log("[QuoteForm Debug] Calendly event scheduled:", eventData);
+                          setScheduledEventData(eventData);
+                          setCalendlyEventScheduled(true);
+                        }}
+                      />
                     </div>
-                  )}
-                  {template.request_time_enabled && (
-                     <div className="space-y-2">
-                      <Label className="text-xl font-bold text-gray-900 flex items-center justify-center sm:justify-start">
-                        Requested Time
-                        {template.request_time_optional && <span className="text-sm font-normal text-gray-500 ml-2">(optional)</span>}
-                      </Label>
-                      <TimeSelect value={requestedTime} onValueChange={setRequestedTime} disabled={isViewingSubmission}>
-                        <SelectTrigger className="h-12 flex justify-center sm:justify-start items-center">
-                          <SelectValue placeholder="Pick a time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {timeSlots.map(time => {
-                            const [hours, minutes] = time.split(':').map(Number);
-                            const ampm = hours >= 12 ? 'PM' : 'AM';
-                            const displayHours = hours % 12 || 12;
-                            const displayTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-                            return <SelectItem key={time} value={time}>{displayTime}</SelectItem>;
-                          })}
-                        </SelectContent>
-                      </TimeSelect>
+                  ) : (
+                    // Show confirmation after scheduling
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                        <span className="text-lg font-semibold text-green-800">Appointment Scheduled!</span>
+                      </div>
+                      {scheduledEventData?.startTime && (
+                        <div className="flex items-center gap-2 text-green-700">
+                          <Clock className="w-5 h-5" />
+                          <span>
+                            {new Date(scheduledEventData.startTime).toLocaleDateString('en-US', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })} at {new Date(scheduledEventData.startTime).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              timeZoneName: 'short',
+                            })}
+                          </span>
+                        </div>
+                      )}
+                      <p className="mt-3 text-sm text-green-600">
+                        Please complete the form below and submit your quote request.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 text-green-700 border-green-300 hover:bg-green-100"
+                        onClick={() => {
+                          setCalendlyEventScheduled(false);
+                          setScheduledEventData(null);
+                        }}
+                      >
+                        Reschedule Appointment
+                      </Button>
                     </div>
                   )}
                 </div>
+              ) : (
+                // Simple Date/Time Pickers (Free tier or non-Calendly templates)
+                (template.request_date_enabled || template.request_time_enabled) && (
+                  <div className="space-y-6">
+                    {template.request_date_enabled && (
+                      <div className="space-y-2">
+                        <Label className="text-xl font-bold text-gray-900 flex items-center justify-center sm:justify-start">
+                          Requested Date
+                          {template.request_date_optional && <span className="text-sm font-normal text-gray-500 ml-2">(optional)</span>}
+                        </Label>
+                        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-center sm:justify-start text-center sm:text-left font-normal h-12 ${!requestedDate && "text-muted-foreground"}`}
+                              disabled={isViewingSubmission}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {requestedDate ? format(requestedDate, "PPP") : <span>Pick a date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={requestedDate}
+                              onSelect={(date) => {
+                                setRequestedDate(date);
+                                setDatePickerOpen(false); // Close popover after selection
+                              }}
+                              initialFocus
+                              disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() - 1)) || isViewingSubmission}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    )}
+                    {template.request_time_enabled && (
+                       <div className="space-y-2">
+                        <Label className="text-xl font-bold text-gray-900 flex items-center justify-center sm:justify-start">
+                          Requested Time
+                          {template.request_time_optional && <span className="text-sm font-normal text-gray-500 ml-2">(optional)</span>}
+                        </Label>
+                        <TimeSelect value={requestedTime} onValueChange={setRequestedTime} disabled={isViewingSubmission}>
+                          <SelectTrigger className="h-12 flex justify-center sm:justify-start items-center">
+                            <SelectValue placeholder="Pick a time" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {timeSlots.map(time => {
+                              const [hours, minutes] = time.split(':').map(Number);
+                              const ampm = hours >= 12 ? 'PM' : 'AM';
+                              const displayHours = hours % 12 || 12;
+                              const displayTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+                              return <SelectItem key={time} value={time}>{displayTime}</SelectItem>;
+                            })}
+                          </SelectContent>
+                        </TimeSelect>
+                      </div>
+                    )}
+                  </div>
+                )
               )}
 
               {/* Customer Info - Disable inputs when viewing submission */}

@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
   from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Save, ArrowLeft, Eye, Palette, Trash2, Sparkles, Star, Loader2 } from "lucide-react";
+import { Save, ArrowLeft, Eye, Palette, Trash2, Sparkles, Star, Loader2, Calendar } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/api/supabaseClient";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import { Switch } from "@/components/ui/switch";
 import { createCheckoutSession } from "@/api/functions";
@@ -41,9 +43,12 @@ export default function TemplateBuilder() {
     request_time_optional: false,
     time_request_label: "Preferred Time",
     footer_enabled: true,
-    footer_text: "This quote template was made on LushQuote. Create your own quotes instantly and streamline your business today!"
+    footer_text: "This quote template was made on LushQuote. Create your own quotes instantly and streamline your business today!",
+    use_calendly_scheduling: false,
+    calendly_event_type_id: null
   });
   const [user, setUser] = useState(null);
+  const [calendlyEventTypes, setCalendlyEventTypes] = useState([]);
   const [activeTab, setActiveTab] = useState("builder");
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -125,6 +130,8 @@ export default function TemplateBuilder() {
             request_time_optional: timeOptional,
             footer_enabled: templateData.footer_enabled !== undefined ? templateData.footer_enabled : true,
             footer_text: templateData.footer_text || "This quote template was made on LushQuote. Create your own quotes instantly and streamline your business today!",
+            use_calendly_scheduling: templateData.use_calendly_scheduling || false,
+            calendly_event_type_id: templateData.calendly_event_type_id || null,
           };
 
           setTemplate(finalTemplateState);
@@ -176,6 +183,29 @@ export default function TemplateBuilder() {
       }
     }
   }, [user, template]);
+
+  // Fetch Calendly event types if user is premium and connected
+  useEffect(() => {
+    const fetchCalendlyEventTypes = async () => {
+      if (user?.subscription_tier === 'premium' && user?.calendly_access_token) {
+        try {
+          const { data, error } = await supabase
+            .from('calendly_event_types')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .order('name');
+
+          if (!error && data) {
+            setCalendlyEventTypes(data);
+          }
+        } catch (err) {
+          console.error('Error fetching Calendly event types:', err);
+        }
+      }
+    };
+    fetchCalendlyEventTypes();
+  }, [user]);
 
   const generateSlug = (name) => {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -541,6 +571,78 @@ export default function TemplateBuilder() {
                     </div>
                   )}
                 </div>
+
+                {/* Calendly Scheduling Section - Premium + Connected Only */}
+                {isPremium && user?.calendly_access_token && (
+                  <div className="space-y-4 rounded-lg border p-4 bg-blue-50/30 border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="calendly-switch" className="text-base flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-blue-600" />
+                          Use Calendly Scheduling
+                        </Label>
+                        <p className="text-sm text-gray-500">Replace date/time picker with Calendly booking widget</p>
+                      </div>
+                      <Switch
+                        id="calendly-switch"
+                        checked={template.use_calendly_scheduling}
+                        onCheckedChange={(checked) => {
+                          setTemplate(prev => ({
+                            ...prev,
+                            use_calendly_scheduling: checked,
+                            // Disable simple date/time when Calendly is enabled
+                            request_date_enabled: checked ? false : prev.request_date_enabled,
+                            request_time_enabled: checked ? false : prev.request_time_enabled,
+                          }));
+                        }}
+                      />
+                    </div>
+
+                    {template.use_calendly_scheduling && (
+                      <div className="space-y-2">
+                        <Label>Select Event Type</Label>
+                        {calendlyEventTypes.length > 0 ? (
+                          <Select
+                            value={template.calendly_event_type_id || ""}
+                            onValueChange={(value) =>
+                              setTemplate(prev => ({ ...prev, calendly_event_type_id: value }))
+                            }
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Choose an event type..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {calendlyEventTypes.map(eventType => (
+                                <SelectItem key={eventType.id} value={eventType.id}>
+                                  {eventType.name} ({eventType.duration_minutes} min)
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+                            No event types found. Please create an event type in Calendly and sync from Settings.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Show Calendly upgrade prompt for premium users without connection */}
+                {isPremium && !user?.calendly_access_token && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-4">
+                    <div className="flex items-start gap-3">
+                      <Calendar className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Calendly Integration Available</p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          Connect your Calendly account in Settings to let customers book appointments directly from your quote forms.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
