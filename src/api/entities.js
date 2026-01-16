@@ -326,6 +326,41 @@ export const QuoteTemplate = {
 
 // QuoteSubmission operations
 export const QuoteSubmission = {
+  // Get a single quote submission by id (alias for findById for API consistency)
+  get: async (id) => {
+    try {
+      const { data, error } = await supabase
+        .from('quote_submissions')
+        .select(`
+          *,
+          quote_templates!inner(
+            id,
+            business_name,
+            owner_email,
+            owner_subscription_tier
+          )
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
+      // Flatten the data to match expected structure
+      const flattened = {
+        ...data,
+        owner_email: data.quote_templates?.owner_email,
+        owner_subscription_tier: data.quote_templates?.owner_subscription_tier,
+        template_business_name: data.quote_templates?.business_name,
+        calculated_price: data.estimated_total
+      };
+
+      return flattened;
+    } catch (error) {
+      console.error('Error getting submission:', error);
+      throw error;
+    }
+  },
+
   // Create a new quote submission
   create: async (submissionData) => {
     try {
