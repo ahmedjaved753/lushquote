@@ -32,6 +32,7 @@ import { createCheckoutSession } from "@/api/functions";
 import StatsOverview from "../components/dashboard/StatsOverview";
 import TemplateCard from "../components/dashboard/TemplateCard";
 import RecentSubmissions from "../components/dashboard/RecentSubmissions";
+import UpcomingAppointments from "../components/dashboard/UpcomingAppointments";
 
 export default function Dashboard() {
   const [templates, setTemplates] = useState([]);
@@ -382,6 +383,13 @@ export default function Dashboard() {
 
         {/* Stats Overview */}
         <StatsOverview stats={stats} isLoading={isLoading} />
+
+        {/* Upcoming Appointments - Only shows if there are Calendly bookings */}
+        <UpcomingAppointments
+          submissions={personalSubmissions}
+          isLoading={isLoading}
+          templates={templates}
+        />
 
         {/* Templates and Recent Submissions */}
         <div className="grid lg:grid-cols-3 gap-8">

@@ -19,6 +19,8 @@ import {
   Trash2,
   MoreHorizontal,
   Clock,
+  ExternalLink,
+  Video,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Link } from "react-router-dom";
@@ -214,6 +216,50 @@ export default function QuoteManagement() {
       return "Invalid date";
     }
   };
+
+  // Format Calendly appointment time
+  const formatCalendlyDateTime = (submission) => {
+    try {
+      if (submission.calendly_event_start_time) {
+        const startDate = new Date(submission.calendly_event_start_time);
+        if (isNaN(startDate.getTime())) return null;
+
+        const datePart = format(startDate, "MMM d, yyyy");
+        const timePart = format(startDate, "h:mm a");
+
+        // Calculate duration if end time exists
+        if (submission.calendly_event_end_time) {
+          const endDate = new Date(submission.calendly_event_end_time);
+          if (!isNaN(endDate.getTime())) {
+            const endTimePart = format(endDate, "h:mm a");
+            return `${datePart} at ${timePart} - ${endTimePart}`;
+          }
+        }
+        return `${datePart} at ${timePart}`;
+      }
+      return null;
+    } catch (error) {
+      console.warn('Error formatting Calendly date/time:', error);
+      return null;
+    }
+  };
+
+  // Check if submission has Calendly booking
+  const hasCalendlyBooking = (submission) => {
+    return !!(submission.calendly_event_uri || submission.calendly_event_start_time);
+  };
+
+  // Get Calendly event status (upcoming, past, canceled, or unknown)
+  const getCalendlyEventStatus = (submission) => {
+    // Check for explicit status from webhook
+    if (submission.calendly_event_status === 'canceled') return 'canceled';
+    if (submission.calendly_event_status === 'rescheduled') return 'rescheduled';
+
+    if (!submission.calendly_event_start_time) return 'unknown';
+    const startTime = new Date(submission.calendly_event_start_time);
+    const now = new Date();
+    return startTime > now ? 'upcoming' : 'past';
+  };
   
   const statusColors = {
     new: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -333,10 +379,22 @@ export default function QuoteManagement() {
                           ${submission.calculated_price?.toLocaleString()}
                         </span>
                       </div>
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 flex flex-col items-end gap-2">
                         <Badge className={`${statusColors[submission.status]} text-sm px-3 py-1 pointer-events-none`}>
                           {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
                         </Badge>
+                        {hasCalendlyBooking(submission) && (
+                          <Badge className={`text-xs px-2 py-0.5 ${
+                            getCalendlyEventStatus(submission) === 'canceled'
+                              ? 'bg-red-100 text-red-700 border-red-200'
+                              : getCalendlyEventStatus(submission) === 'upcoming'
+                                ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                : 'bg-gray-100 text-gray-600 border-gray-200'
+                          }`}>
+                            <Video className="w-3 h-3 mr-1 inline" />
+                            {getCalendlyEventStatus(submission) === 'canceled' ? 'Canceled' : 'Calendly'}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -362,7 +420,48 @@ export default function QuoteManagement() {
                             Submitted {formatDate(submission.created_date || submission.submitted_at)}
                           </span>
                         </div>
-                        { (submission.requested_date || submission.requested_time || submission.requested_datetime) && (
+                        {/* Calendly Appointment Display */}
+                        {hasCalendlyBooking(submission) && formatCalendlyDateTime(submission) && (
+                          <div className={`flex items-start gap-2 text-xs sm:text-sm ${
+                            getCalendlyEventStatus(submission) === 'canceled'
+                              ? 'text-red-600'
+                              : getCalendlyEventStatus(submission) === 'upcoming'
+                                ? 'text-blue-700'
+                                : 'text-gray-600'
+                          }`}>
+                            <Video className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-1">
+                              <span className={`font-medium break-words leading-tight ${
+                                getCalendlyEventStatus(submission) === 'canceled' ? 'line-through' : ''
+                              }`}>
+                                {getCalendlyEventStatus(submission) === 'canceled'
+                                  ? '❌ Canceled: '
+                                  : getCalendlyEventStatus(submission) === 'upcoming'
+                                    ? '📅 Scheduled: '
+                                    : 'Appointment: '}
+                                {formatCalendlyDateTime(submission)}
+                              </span>
+                              {submission.calendly_cancellation_reason && (
+                                <span className="text-xs text-red-500 italic">
+                                  Reason: {submission.calendly_cancellation_reason}
+                                </span>
+                              )}
+                              {submission.calendly_invitee_uri && getCalendlyEventStatus(submission) !== 'canceled' && (
+                                <a
+                                  href={submission.calendly_invitee_uri.replace('api.calendly.com', 'calendly.com').replace('/invitees/', '/events/')}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1 text-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  View in Calendly <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {/* Regular Date/Time Request Display (only if no Calendly booking) */}
+                        {!hasCalendlyBooking(submission) && (submission.requested_date || submission.requested_time || submission.requested_datetime) && (
                           <div className="flex items-start gap-2 text-xs sm:text-sm text-green-700">
                             <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
                             <span className="font-medium break-words leading-tight">
