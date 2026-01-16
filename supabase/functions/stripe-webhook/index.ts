@@ -32,23 +32,34 @@ Deno.serve(async (req: Request) => {
   const signature = req.headers.get("Stripe-Signature");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 
-  if (!signature || !webhookSecret) {
-    return new Response("Missing signature or webhook secret", {
+  if (!signature) {
+    console.error("No Stripe-Signature header");
+    return new Response(JSON.stringify({ error: "No signature" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
-      headers: corsHeaders,
+    });
+  }
+
+  if (!webhookSecret) {
+    console.error("STRIPE_WEBHOOK_SECRET not configured");
+    return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
     });
   }
 
   try {
     const body = await req.text();
-    // Use constructEventAsync for Deno/Edge runtime
+
+    // Verify the webhook signature using Stripe's async method for Deno
     const event = await stripe.webhooks.constructEventAsync(
       body,
       signature,
       webhookSecret
     );
 
-    console.log(`Received webhook event: ${event.type}`);
+    console.log(`✅ Received webhook event: ${event.type}`);
+    console.log(`Event ID: ${event.id}`);
 
     switch (event.type) {
       case "checkout.session.completed":
