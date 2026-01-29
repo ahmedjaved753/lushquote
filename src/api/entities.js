@@ -1,8 +1,47 @@
 import { supabase } from './supabaseClient';
 
-// Generate slug from business name
-const generateSlug = (name) => {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// Generate slug from business name with unique suffix
+const generateSlug = (name, addUniqueSuffix = false) => {
+  const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (addUniqueSuffix) {
+    // Add a short random suffix to ensure uniqueness
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    return `${baseSlug}-${randomSuffix}`;
+  }
+  return baseSlug;
+};
+
+// Check if slug exists and generate a unique one if needed
+const ensureUniqueSlug = async (baseSlug, userId) => {
+  // First try the base slug
+  const { data: existing } = await supabase
+    .from('quote_templates')
+    .select('id')
+    .eq('slug', baseSlug)
+    .maybeSingle();
+
+  if (!existing) {
+    return baseSlug;
+  }
+
+  // If slug exists, add a unique suffix
+  let attempts = 0;
+  while (attempts < 10) {
+    const uniqueSlug = generateSlug(baseSlug, true);
+    const { data: check } = await supabase
+      .from('quote_templates')
+      .select('id')
+      .eq('slug', uniqueSlug)
+      .maybeSingle();
+
+    if (!check) {
+      return uniqueSlug;
+    }
+    attempts++;
+  }
+
+  // Fallback: use timestamp-based suffix
+  return `${baseSlug}-${Date.now()}`;
 };
 
 // User operations matching the expected API
@@ -81,7 +120,9 @@ export const QuoteTemplate = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const slug = templateData.slug || generateSlug(templateData.business_name);
+      // Generate a unique slug
+      const baseSlug = templateData.slug || generateSlug(templateData.business_name);
+      const slug = await ensureUniqueSlug(baseSlug, user.id);
       const services = Array.isArray(templateData.services) ? templateData.services : [];
       
       // Create template first
