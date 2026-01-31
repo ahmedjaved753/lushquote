@@ -19,3 +19,13 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     detectSessionInUrl: true
   }
 })
+
+// Create an anonymous-only client for public operations (no persisted sessions)
+// This ensures public API calls work even when there's stale auth state
+export const supabaseAnon = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false
+  }
+})

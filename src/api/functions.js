@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase, supabaseAnon } from './supabaseClient';
 
 // Supabase Edge Functions for Stripe integration
 export const createCheckoutSession = async () => {
@@ -73,20 +73,22 @@ export const stripeWebhook = async (event) => {
 };
 
 // Database operation to increment submission counter
+// Uses anonymous client since this is called after public quote submissions
 export const incrementSubmissionCounter = async (templateId) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAnon
     .rpc('increment_submission_counter', { template_id: templateId });
   return { data, error };
 };
 
 // Get template public data (without auth requirement)
+// Uses the anonymous Supabase client to ensure it always works for public access
 export const getTemplatePublicData = async (templateId) => {
   try {
     console.log('[getTemplatePublicData] Starting fetch for template:', templateId);
-    console.log('[getTemplatePublicData] Supabase client:', supabase);
+    console.log('[getTemplatePublicData] Using anonymous Supabase client');
 
     // Get template data (only active templates are public)
-    const { data: template, error: templateError } = await supabase
+    const { data: template, error: templateError } = await supabaseAnon
       .from('quote_templates')
       .select(`
         id,
@@ -128,7 +130,7 @@ export const getTemplatePublicData = async (templateId) => {
     // Fetch Calendly event type if template uses Calendly scheduling
     let calendlyEventType = null;
     if (template.use_calendly_scheduling && template.calendly_event_type_id) {
-      const { data: eventType, error: eventTypeError } = await supabase
+      const { data: eventType, error: eventTypeError } = await supabaseAnon
         .from('calendly_event_types')
         .select('id, name, duration_minutes, scheduling_url')
         .eq('id', template.calendly_event_type_id)
@@ -143,7 +145,7 @@ export const getTemplatePublicData = async (templateId) => {
     // Get owner's timezone from user_profiles
     let ownerTimezone = 'UTC';
     if (template.owner_email) {
-      const { data: ownerProfile } = await supabase
+      const { data: ownerProfile } = await supabaseAnon
         .from('user_profiles')
         .select('time_zone')
         .eq('email', template.owner_email)
@@ -201,11 +203,12 @@ export const getTemplatePublicData = async (templateId) => {
 };
 
 // Create a public quote submission (no auth required)
+// Uses the anonymous Supabase client to avoid stale auth token issues
 export const createPublicQuoteSubmission = async (submissionData) => {
   try {
-    console.log('[createPublicQuoteSubmission] Starting submission:', submissionData);
-    
-    const { data, error } = await supabase
+    console.log('[createPublicQuoteSubmission] Starting submission with anonymous client:', submissionData);
+
+    const { data, error } = await supabaseAnon
       .from('quote_submissions')
       .insert([submissionData])
       .select()
