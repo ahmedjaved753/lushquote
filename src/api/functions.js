@@ -203,21 +203,29 @@ export const getTemplatePublicData = async (templateId) => {
 };
 
 // Create a public quote submission (no auth required)
-// Uses the anonymous Supabase client to avoid stale auth token issues
+// Uses Edge Function with service role to bypass RLS completely
 export const createPublicQuoteSubmission = async (submissionData) => {
   try {
-    console.log('[createPublicQuoteSubmission] Starting submission with anonymous client:', submissionData);
+    console.log('[createPublicQuoteSubmission] Starting submission via Edge Function:', submissionData);
 
-    const { data, error } = await supabaseAnon
-      .from('quote_submissions')
-      .insert([submissionData])
-      .select()
-      .single();
+    // Use the Edge Function which has service role access
+    const { data, error } = await supabaseAnon.functions.invoke('submit-public-quote', {
+      body: submissionData
+    });
 
-    console.log('[createPublicQuoteSubmission] Result:', { data, error });
+    console.log('[createPublicQuoteSubmission] Edge Function result:', { data, error });
 
-    if (error) throw error;
-    return { data, error: null };
+    if (error) {
+      console.error('[createPublicQuoteSubmission] Edge Function error:', error);
+      throw error;
+    }
+
+    // Edge function returns { data: submission, error: null } on success
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return { data: data?.data || data, error: null };
   } catch (error) {
     console.error('Error in createPublicQuoteSubmission:', error);
     return { data: null, error };
