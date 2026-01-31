@@ -20,12 +20,22 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 })
 
+// Custom memory-only storage that doesn't persist anything
+const memoryStorage = {
+  _data: {},
+  getItem: (key) => memoryStorage._data[key] || null,
+  setItem: (key, value) => { memoryStorage._data[key] = value },
+  removeItem: (key) => { delete memoryStorage._data[key] }
+}
+
 // Create an anonymous-only client for public operations (no persisted sessions)
-// This ensures public API calls work even when there's stale auth state
+// Uses memory-only storage and a unique storage key to completely isolate from main client
 export const supabaseAnon = createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
-    detectSessionInUrl: false
+    detectSessionInUrl: false,
+    storage: memoryStorage,
+    storageKey: 'supabase-anon-auth'
   }
 })
